@@ -11,6 +11,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 
 /**
  * Shooter: two flywheel motors ("shooterTop", "shooterBottom") geared together with same-size
@@ -86,6 +87,9 @@ public class Shooter implements Subsystem {
     private boolean gateTestOpen = false;
 
     private double power = 0;
+    // This loop's readings, kept for the match recording so it doesn't ask the hub again.
+    private double measuredRpm = 0;
+    private boolean gateOpen = false;
     private double volts = NOMINAL_VOLTS;
     private final ElapsedTime voltageTimer = new ElapsedTime();
     private final ElapsedTime stalledTimer = new ElapsedTime();
@@ -189,6 +193,7 @@ public class Shooter implements Subsystem {
         }
 
         double rpm = getRPM();
+        measuredRpm = rpm;
         if (!spinning || TARGET_RPM <= 0 || top == null || encoderFault) {
             power = 0;
         } else {
@@ -219,8 +224,9 @@ public class Shooter implements Subsystem {
         if (bottom != null) {
             bottom.setPower(BOTTOM_ENABLED ? power : 0);
         }
+        gateOpen = isGateOpen();
         if (gate != null) {
-            gate.setPower(isGateOpen() ? GATE_FEED_POWER : 0);
+            gate.setPower(gateOpen ? GATE_FEED_POWER : 0);
         }
     }
 
@@ -240,6 +246,25 @@ public class Shooter implements Subsystem {
         if (USE_GATE) {
             dashboard.addData("Gate", gate == null ? "--" : isGateOpen() ? "FEEDING" : "STOPPED");
         }
+    }
+
+    /**
+     * Each shot shows up as a dip in shooter_rpm; how deep it goes and how long it takes to get
+     * back within RPM_TOLERANCE is what limits how fast the robot can shoot. shooter_power shows
+     * how hard the controller pushed to recover (1.0 = flat out, so a higher KP can't help).
+     */
+    @Override
+    public void record(MatchRecorder recorder) {
+        recorder.put("shooter_spinning", spinning);
+        recorder.put("shooter_target_rpm", spinning ? TARGET_RPM : 0.0);
+        recorder.put("shooter_rpm", top == null ? null : measuredRpm);
+        recorder.put("shooter_at_speed", top != null && spinning && !encoderFault
+                && Math.abs(measuredRpm - TARGET_RPM) < RPM_TOLERANCE);
+        recorder.put("shooter_power", power);
+        recorder.put("shooter_encoder_fault", encoderFault);
+        recorder.put("shooter_fire_requested", fireRequested);
+        recorder.put("gate_override", gateTestOpen);
+        recorder.put("gate_open", gateOpen);
     }
 
     @Override

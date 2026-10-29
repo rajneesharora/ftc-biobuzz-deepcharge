@@ -11,7 +11,10 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.teamcode.drive.PedroDrive;
+import org.firstinspires.ftc.teamcode.lib.Battery;
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 import org.firstinspires.ftc.teamcode.lib.PoseStorage;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
@@ -116,6 +119,9 @@ public class BiobuzzRedAuto extends OpMode {
     private String shot2At = "--";
     private String parkedAt = "--";
 
+    private MatchRecorder recorder;
+    private String recordedStep = "";
+
     private Pose pose(double x, double y) {
         return p.of(x, y, HEADING_DEG);
     }
@@ -135,6 +141,7 @@ public class BiobuzzRedAuto extends OpMode {
         intake = new Intake(hardwareMap);
         transport = new Transport(hardwareMap);
         shooter = new Shooter(hardwareMap);
+        recorder = new MatchRecorder("auto_red", new Battery(hardwareMap));
     }
 
     @Override
@@ -149,10 +156,12 @@ public class BiobuzzRedAuto extends OpMode {
         transport.report(dashboard);
         shooter.report(dashboard);
         dashboard.update();
+        record();
     }
 
     @Override
     public void start() {
+        recorder.setPhase("RUN");
         Pose start = pose(START_X, START_Y);
         Pose approach = pose(APPROACH_X, APPROACH_Y);
         Pose intakeEnd = pose(INTAKE_END_X, INTAKE_END_Y);
@@ -302,6 +311,29 @@ public class BiobuzzRedAuto extends OpMode {
         transport.report(dashboard);
         shooter.report(dashboard);
         dashboard.update();
+        record();
+    }
+
+    /**
+     * One row of the match recording (/sdcard/FIRST/analysis/auto_red_*.csv): the step, the
+     * pose and every mechanism. Each step change is also written as an event, so the file shows
+     * how long every step really took.
+     */
+    private void record() {
+        Pose pose = follower.pose();
+        recorder.put("step", step);
+        recorder.put("x", pose.x());
+        recorder.put("y", pose.y());
+        recorder.put("heading_deg", Math.toDegrees(pose.heading()));
+        recorder.put("pedro_mode", PedroDrive.modeName(follower));
+        intake.record(recorder);
+        transport.record(recorder);
+        shooter.record(recorder);
+        if (!step.equals(recordedStep)) {
+            recorder.event("step: " + step);
+            recordedStep = step;
+        }
+        recorder.endLoop();
     }
 
     @Override
@@ -311,5 +343,8 @@ public class BiobuzzRedAuto extends OpMode {
         intake.stop();
         transport.stop();
         shooter.stop();
+        recorder.setPhase("STOP");
+        recorder.endLoop();
+        recorder.close();
     }
 }

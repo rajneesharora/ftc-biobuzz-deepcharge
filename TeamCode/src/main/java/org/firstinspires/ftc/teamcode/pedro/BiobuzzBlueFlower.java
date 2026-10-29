@@ -12,7 +12,10 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.teamcode.drive.PedroDrive;
+import org.firstinspires.ftc.teamcode.lib.Battery;
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 import org.firstinspires.ftc.teamcode.lib.PoseStorage;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
@@ -155,6 +158,9 @@ public class BiobuzzBlueFlower extends OpMode {
     private final ElapsedTime autoTimer = new ElapsedTime();
 
     private String step = "waiting for PLAY";
+
+    private MatchRecorder recorder;
+    private String recordedStep = "";
     /** Where the robot really ended up -- stays on screen. */
     private String endedAt = "--";
 
@@ -172,6 +178,7 @@ public class BiobuzzBlueFlower extends OpMode {
         intake = new Intake(hardwareMap);
         transport = new Transport(hardwareMap);
         shooter = new Shooter(hardwareMap);
+        recorder = new MatchRecorder("auto_blue_flower", new Battery(hardwareMap));
     }
 
     @Override
@@ -185,10 +192,12 @@ public class BiobuzzBlueFlower extends OpMode {
                 ? "MISSING '" + FLOWER_SERVO_NAME + "' in robot config" : "found (not moved until step 2)");
         dashboard.showPose(follower.pose());
         dashboard.update();
+        record();
     }
 
     @Override
     public void start() {
+        recorder.setPhase("RUN");
         Pose start = startPose();
         Pose offWall = p.of(OFF_WALL_X, OFF_WALL_Y, START_HEADING_DEG);
         double flowerHeading = START_HEADING_DEG + TURN_DEG;
@@ -413,6 +422,30 @@ public class BiobuzzBlueFlower extends OpMode {
         transport.report(dashboard);
         shooter.report(dashboard);
         dashboard.update();
+        record();
+    }
+
+    /**
+     * One row of the match recording (/sdcard/FIRST/analysis/auto_blue_flower_*.csv): the step, the
+     * pose, the flower servo and every mechanism. Each step change is also written as an event,
+     * so the file shows how long every step really took.
+     */
+    private void record() {
+        Pose pose = follower.pose();
+        recorder.put("step", step);
+        recorder.put("x", pose.x());
+        recorder.put("y", pose.y());
+        recorder.put("heading_deg", Math.toDegrees(pose.heading()));
+        recorder.put("pedro_mode", PedroDrive.modeName(follower));
+        recorder.put("flower_servo_position", flowerServo == null ? null : flowerServo.getPosition());
+        intake.record(recorder);
+        transport.record(recorder);
+        shooter.record(recorder);
+        if (!step.equals(recordedStep)) {
+            recorder.event("step: " + step);
+            recordedStep = step;
+        }
+        recorder.endLoop();
     }
 
     @Override
@@ -422,5 +455,8 @@ public class BiobuzzBlueFlower extends OpMode {
         intake.stop();
         transport.stop();
         shooter.stop();
+        recorder.setPhase("STOP");
+        recorder.endLoop();
+        recorder.close();
     }
 }
