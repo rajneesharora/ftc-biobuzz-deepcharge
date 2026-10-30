@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 
 /**
  * Transport: two continuous-rotation servos that carry pieces from the intake into the
@@ -99,6 +100,12 @@ public class Transport implements Subsystem {
     public void report(Dashboard dashboard) {
         dashboard.section("TRANSPORT");
         dashboard.addData("Transport", state + (rightStopped ? " (right held)" : "") + "  [" + status + "]");
+    }
+
+    @Override
+    public void record(MatchRecorder recorder) {
+        recorder.put("transport", state);
+        recorder.put("transport_right_held", rightStopped);
     }
 
     @Override

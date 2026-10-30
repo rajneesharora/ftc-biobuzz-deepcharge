@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 
 /**
  * Intake: one motor, plus an optional second one (e.g. a top and bottom roller).
@@ -90,6 +91,11 @@ public class Intake implements Subsystem {
     public void report(Dashboard dashboard) {
         dashboard.section("INTAKE");
         dashboard.addData("Intake", state + "  [" + status + "]");
+    }
+
+    @Override
+    public void record(MatchRecorder recorder) {
+        recorder.put("intake", state);
     }
 
     @Override

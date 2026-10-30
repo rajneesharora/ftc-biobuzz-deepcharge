@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 import org.firstinspires.ftc.teamcode.lib.VelocityMotor;
 
 /**
@@ -62,6 +63,10 @@ public class Shooter implements Subsystem {
     private boolean spinning = false;
     private boolean fireRequested = false;
     private boolean gateTestOpen = false;
+
+    // Read once per update(), so the dashboard and the recording don't each ask the hub again.
+    private double measuredRpm = 0;
+    private boolean gateOpen = false;
 
     public Shooter(HardwareMap hardwareMap) {
         DcMotorEx motor = ENABLED ? hardwareMap.tryGet(DcMotorEx.class, FLYWHEEL_NAME) : null;
@@ -123,9 +128,11 @@ public class Shooter implements Subsystem {
         if (flywheel != null) {
             flywheel.setPIDF(VEL_P, VEL_I, VEL_D, VEL_F);
             flywheel.setTargetRPM(spinning ? TARGET_RPM : 0);
+            measuredRpm = flywheel.getRPM();
         }
+        gateOpen = isGateOpen();
         if (gate != null) {
-            gate.setPower(isGateOpen() ? GATE_FEED_POWER : 0);
+            gate.setPower(gateOpen ? GATE_FEED_POWER : 0);
         }
     }
 
@@ -134,10 +141,27 @@ public class Shooter implements Subsystem {
         dashboard.section("SHOOTER");
         dashboard.addData("Shooter", (spinning ? "SPINNING" : "OFF") + "  [" + status + "]");
         dashboard.addData("RPM (actual / target)", flywheel == null ? "-- / " + Math.round(TARGET_RPM)
-                : Math.round(flywheel.getRPM()) + " / " + Math.round(flywheel.getTargetRPM()));
+                : Math.round(measuredRpm) + " / " + Math.round(flywheel.getTargetRPM()));
         dashboard.addData("Ready to fire", atSpeed());
         dashboard.addData("Gate", gate == null ? "--" : isGateOpen() ? "FEEDING" : "STOPPED");
         dashboard.addData("Firing", isFiring());
+    }
+
+    /**
+     * Each shot shows up as a dip in shooter_rpm. How deep it goes and how long it takes to get
+     * back within RPM_TOLERANCE is what limits how fast the robot can shoot.
+     */
+    @Override
+    public void record(MatchRecorder recorder) {
+        recorder.put("shooter_spinning", spinning);
+        recorder.put("shooter_target_rpm", flywheel == null ? null : flywheel.getTargetRPM());
+        recorder.put("shooter_rpm", flywheel == null ? null : measuredRpm);
+        // Same test as VelocityMotor.atSpeed(), on this loop's reading -- no extra hub read.
+        recorder.put("shooter_at_speed", flywheel != null && flywheel.getTargetRPM() > 0
+                && Math.abs(measuredRpm - flywheel.getTargetRPM()) < VelocityMotor.RPM_TOLERANCE);
+        recorder.put("shooter_fire_requested", fireRequested);
+        recorder.put("gate_override", gateTestOpen);
+        recorder.put("gate_open", gateOpen);
     }
 
     @Override
