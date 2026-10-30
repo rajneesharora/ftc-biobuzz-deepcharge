@@ -37,7 +37,11 @@ public class Dashboard {
         field.setOffsets(FieldPresets.INSTANCE.getPEDRO_PATHING());
     }
 
-    /** Lets a gamepad plugged into the Panels browser tab drive alongside the real one. */
+    /**
+     * Combines a gamepad plugged into the Panels browser tab with the real one. Buttons from
+     * either count, but any stick or trigger the browser reports as non-zero REPLACES the real
+     * one -- so the browser controller wins whenever it's touched (or drifting).
+     */
     public Gamepad mergeGamepad(Gamepad driverStationGamepad) {
         return PanelsGamepad.INSTANCE.getFirstManager().asCombinedFTCGamepad(driverStationGamepad);
     }
