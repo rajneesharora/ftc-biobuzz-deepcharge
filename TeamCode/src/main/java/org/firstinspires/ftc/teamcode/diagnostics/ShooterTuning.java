@@ -15,6 +15,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Shooter;
 import org.firstinspires.ftc.teamcode.subsystems.TagCamera;
 import org.firstinspires.ftc.teamcode.subsystems.Transport;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagClusterDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
 
 import java.io.File;
@@ -41,8 +42,10 @@ import java.util.List;
  * Range is the camera -> goal tag distance, averaged over the last RANGE_SAMPLES frames so it
  * doesn't jump. A point can only be recorded while the goal tag is in view.
  *
- * GOAL_TAG_ID = -1 uses the nearest game tag in view (its id is shown, so you can then set
- * GOAL_TAG_ID to the Blue goal's id in Panels and stop other tags from being picked up).
+ * The goal can be a single tag or a cluster (since SDK 12, several tags read together come back
+ * as one cluster detection, with a name but no id). GOAL_TAG empty = the nearest one in view;
+ * otherwise only a detection whose id or name contains GOAL_TAG counts, e.g. "20" or "Blue".
+ * "Camera sees" shows what is detected and what was skipped.
  *
  * Recorded points stay on screen and are saved to /sdcard/FIRST/shooter_table.csv on every
  * change, so nothing is lost if the program stops. Copy the list from the screen, or fetch the
@@ -54,8 +57,8 @@ import java.util.List;
 @TeleOp(name = "Shooter Tuning", group = "Diagnostics")
 public class ShooterTuning extends LinearOpMode {
 
-    /** -1 = nearest game tag in view; otherwise only this id counts as the goal. */
-    public static int GOAL_TAG_ID = -1;
+    /** Empty = nearest tag or cluster in view; otherwise its id or name must contain this. */
+    public static String GOAL_TAG = "";
     public static double RPM_STEP = 50;
     public static double RPM_FINE_STEP = 10;
     public static double DRIVE_SPEED = 0.4;
@@ -68,9 +71,9 @@ public class ShooterTuning extends LinearOpMode {
     /** One "this works" point. */
     private static class Point implements Comparable<Point> {
         final double rangeIn, targetRpm, actualRpm;
-        final int tagId;
+        final String tagId;
 
-        Point(double rangeIn, double targetRpm, double actualRpm, int tagId) {
+        Point(double rangeIn, double targetRpm, double actualRpm, String tagId) {
             this.rangeIn = rangeIn;
             this.targetRpm = targetRpm;
             this.actualRpm = actualRpm;
@@ -98,8 +101,9 @@ public class ShooterTuning extends LinearOpMode {
     private final ArrayDeque<Double> ranges = new ArrayDeque<>();
     private final ElapsedTime sinceTagSeen = new ElapsedTime();
     private final List<Point> points = new ArrayList<>();
-    private int goalId = -1;
+    private String goalId = "";
     private double goalBearing;
+    private String cameraSees = "--";
     private String saveStatus = "nothing recorded yet";
 
     @Override
@@ -183,28 +187,51 @@ public class ShooterTuning extends LinearOpMode {
         Shooter.TARGET_RPM = originalRpm;
     }
 
-    /** Finds the goal tag in this frame and adds its range to the running average. */
+    /** Finds the goal (single tag or cluster) in this frame and adds its range to the average. */
     private void readGoalTag(TagCamera camera) {
-        AprilTagSingleDetection goal = null;
+        AprilTagDetection goal = null;
+        String goalLabel = "";
+        int singles = 0, clusters = 0, unknown = 0, noPose = 0, filtered = 0;
         for (AprilTagDetection tag : camera.tags()) {
-            if (!(tag instanceof AprilTagSingleDetection) || tag.ftcPose == null) {
+            String label;
+            if (tag instanceof AprilTagSingleDetection) {
+                AprilTagSingleDetection single = (AprilTagSingleDetection) tag;
+                if (single.metadata == null) {
+                    unknown++;   // not a game tag: its size isn't known, so no range
+                    continue;
+                }
+                singles++;
+                label = single.id + " " + single.metadata.name;
+            } else if (tag instanceof AprilTagClusterDetection) {
+                clusters++;
+                label = "cluster " + ((AprilTagClusterDetection) tag).metadata.name;
+            } else {
                 continue;
             }
-            AprilTagSingleDetection single = (AprilTagSingleDetection) tag;
-            if (single.metadata == null || (GOAL_TAG_ID >= 0 && single.id != GOAL_TAG_ID)) {
+            if (tag.ftcPose == null) {
+                noPose++;
                 continue;
             }
-            if (goal == null || single.ftcPose.range < goal.ftcPose.range) {
-                goal = single;
+            if (!GOAL_TAG.isEmpty() && !label.toLowerCase().contains(GOAL_TAG.toLowerCase())) {
+                filtered++;
+                continue;
+            }
+            if (goal == null || tag.ftcPose.range < goal.ftcPose.range) {
+                goal = tag;
+                goalLabel = label;
             }
         }
+        cameraSees = singles + " tag(s), " + clusters + " cluster(s)"
+                + (unknown > 0 ? ", " + unknown + " unknown" : "")
+                + (noPose > 0 ? ", " + noPose + " without range" : "")
+                + (filtered > 0 ? ", " + filtered + " skipped (not '" + GOAL_TAG + "')" : "");
         if (goal == null) {
             return;
         }
-        if (goal.id != goalId) {
+        if (!goalLabel.equals(goalId)) {
             ranges.clear();   // a different tag: don't average its range with the old one's
         }
-        goalId = goal.id;
+        goalId = goalLabel;
         goalBearing = goal.ftcPose.bearing;
         ranges.addLast(goal.ftcPose.range);
         while (ranges.size() > Math.max(1, RANGE_SAMPLES)) {
@@ -226,9 +253,11 @@ public class ShooterTuning extends LinearOpMode {
     }
 
     private void showGoal(Dashboard dashboard) {
-        dashboard.section("GOAL TAG" + (GOAL_TAG_ID >= 0 ? " (id " + GOAL_TAG_ID + " only)" : " (nearest)"));
+        dashboard.section("GOAL TAG" + (GOAL_TAG.isEmpty() ? " (nearest)" : " ('" + GOAL_TAG + "' only)"));
+        dashboard.addData("Camera sees", cameraSees);
         if (tagInView()) {
-            dashboard.addData("Tag " + goalId + " range (avg, in)", round1(averageRange()));
+            dashboard.addData("Goal", goalId);
+            dashboard.addData("Range (avg, in)", round1(averageRange()));
             dashboard.addData("Bearing (deg)", round1(goalBearing) + "  (+ = goal is to the left)");
         } else {
             dashboard.addData("Goal tag", "NOT in view");
@@ -241,7 +270,7 @@ public class ShooterTuning extends LinearOpMode {
         Collections.sort(sorted);
         for (Point point : sorted) {
             dashboard.addLine(round1(point.rangeIn) + " in  ->  " + Math.round(point.targetRpm)
-                    + " RPM   (actual " + Math.round(point.actualRpm) + ", tag " + point.tagId + ")");
+                    + " RPM   (actual " + Math.round(point.actualRpm) + ", " + point.tagId + ")");
         }
     }
 
@@ -250,7 +279,7 @@ public class ShooterTuning extends LinearOpMode {
         List<Point> sorted = new ArrayList<>(points);
         Collections.sort(sorted);
         try (FileWriter out = new FileWriter(TABLE_FILE)) {
-            out.write("range_in,target_rpm,actual_rpm,tag_id\n");
+            out.write("range_in,target_rpm,actual_rpm,tag\n");
             for (Point point : sorted) {
                 out.write(round1(point.rangeIn) + "," + Math.round(point.targetRpm) + ","
                         + Math.round(point.actualRpm) + "," + point.tagId + "\n");

@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
 import org.firstinspires.ftc.teamcode.subsystems.TagCamera;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
+import org.firstinspires.ftc.vision.apriltag.AprilTagClusterDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagSingleDetection;
 
 import java.util.List;
@@ -51,6 +52,8 @@ public class AprilTagCheck extends LinearOpMode {
                     }
                     dashboard.section("Tag " + single.id + " (" + single.metadata.name + ")");
                     dashboard.addData("Confidence", round1(single.decisionMargin));
+                } else if (tag instanceof AprilTagClusterDetection) {
+                    dashboard.section("Tag cluster (" + ((AprilTagClusterDetection) tag).metadata.name + ")");
                 } else {
                     dashboard.section("Tag cluster");
                 }
