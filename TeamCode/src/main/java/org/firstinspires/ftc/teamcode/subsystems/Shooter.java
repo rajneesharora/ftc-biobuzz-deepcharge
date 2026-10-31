@@ -97,6 +97,11 @@ public class Shooter implements Subsystem {
         this.fireRequested = fire;
     }
 
+    /** Measured flywheel speed, or 0 if there's no flywheel. */
+    public double getRPM() {
+        return flywheel == null ? 0 : flywheel.getRPM();
+    }
+
     public boolean atSpeed() {
         if (flywheel == null) {
             return spinning;   // no wheel to measure: pretend, so the controls stay testable
