@@ -20,7 +20,8 @@ import org.firstinspires.ftc.teamcode.subsystems.Transport;
  * Not an OpMode on its own (it's abstract and has no @TeleOp), so it never shows on the DS.
  * The loop never waits for anything.
  *
- * DRIVER -- gamepad 1 (or a controller plugged into the Panels browser tab):
+ * DRIVER -- gamepad 1 (and a controller in the Panels browser tab, only if
+ *           DriverSettings.ALLOW_BROWSER_GAMEPAD is on -- keep it off for matches):
  *   left stick        drive (field-centric by default)
  *   right stick X     turn
  *   left trigger      hold for slow mode
@@ -116,7 +117,7 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
 
     /** Reads the gamepads once, so everything below sees the same thing. */
     private void readGamepad() {
-        pad = dashboard.mergeGamepad(gamepad1);
+        pad = DriverSettings.ALLOW_BROWSER_GAMEPAD ? dashboard.mergeGamepad(gamepad1) : gamepad1;
         operator = gamepad2;
         buttons.update();
     }
@@ -200,6 +201,9 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
         dashboard.addData("Mode", lockPosition.down() ? "LOCKED"
                 : DriverSettings.FIELD_CENTRIC ? "FIELD-CENTRIC" : "ROBOT-CENTRIC");
         dashboard.addData("Speed", slowMode.down() ? "SLOW" : turboMode.down() ? "TURBO" : "NORMAL");
+        if (DriverSettings.ALLOW_BROWSER_GAMEPAD) {
+            dashboard.addData("Browser gamepad", "ON -- turn off for matches");
+        }
         drive.report(dashboard);
 
         intake.report(dashboard);
