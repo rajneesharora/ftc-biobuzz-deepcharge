@@ -35,14 +35,18 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  * by hand.
  *
  *   1  at START: flywheel spins up, then intake + transport + gate run -> shoot
- *   2  flywheel and gate stop; intake + transport keep running (balls wait at the gate)
+ *   2  gate stops; intake + transport keep running (balls wait at the gate). The flywheel
+ *      keeps spinning (KEEP_FLYWHEEL_SPINNING), so it's at speed again for step 8
  *   3  curve (bowing away from the wall) to APPROACH, just before the balls
  *   4  creep slowly along the row to INTAKE_END, intake first, eating the balls one after
  *      another -- then wait INTAKE_WAIT_MS
  *   5  intake + transport stop; curve to CROSS_START
  *   6  straight across to CROSS_END
  *   7  straight to TURN, turning 180 degrees on the way
- *   8  straight to SHOOT_2; flywheel spins up, then intake + transport + gate -> shoot again
+ *   8  straight to SHOOT_2; once the flywheel is at speed, intake + transport + gate -> shoot again
+ *
+ * Both spin-ups wait for the flywheel to reach speed, capped at SPIN_UP_1_MS / SPIN_UP_2_MS,
+ * so a wheel that's already at speed costs no time at all.
  *   9  curve to PARK
  *
  * The heading is HEADING_DEG up to CROSS_END and HEADING_DEG + 180 from TURN on. The creep
@@ -97,8 +101,15 @@ public class BiobuzzBlueAuto extends OpMode {
     /** Power while creeping along the balls (0-1). Lower = slower, gentler intake. */
     public static double CREEP_POWER = 0.3;
 
+    /** Longest wait for the flywheel to reach speed. Moves on as soon as it's there. */
     public static double SPIN_UP_1_MS = 3000;
     public static double SPIN_UP_2_MS = 2000;
+    /**
+     * true = the flywheel keeps spinning between the two volleys, so it's already at speed when
+     * the robot reaches SHOOT_2. false = it stops in between, like before (saves a little battery
+     * but costs a spin-up).
+     */
+    public static boolean KEEP_FLYWHEEL_SPINNING = true;
     /** Long enough for ALL balls to go through. Raise it if a ball is left behind. */
     public static double SHOOT_MS = 2000;
     /** Extra time at the end of the row so the last ball gets pulled in. */
@@ -180,7 +191,7 @@ public class BiobuzzBlueAuto extends OpMode {
 
         schedule(sequential(
                 // 1. Shoot the preloads.
-                waitMs(SPIN_UP_1_MS),
+                waitForFlywheel(SPIN_UP_1_MS),
                 instant(() -> {
                     intake.setState(Intake.State.INTAKE);
                     transport.setState(Transport.State.FEED);
@@ -189,10 +200,10 @@ public class BiobuzzBlueAuto extends OpMode {
                 }),
                 waitMs(SHOOT_MS),
 
-                // 2. Shooter off; intake + transport keep running, balls wait at the gate.
+                // 2. Gate shut; intake + transport keep running, balls wait at the gate.
                 instant(() -> {
                     shooter.setGateTestOpen(false);
-                    shooter.setSpinning(false);
+                    shooter.setSpinning(KEEP_FLYWHEEL_SPINNING);
                     step = "curving to the balls";
                 }),
 
@@ -236,7 +247,7 @@ public class BiobuzzBlueAuto extends OpMode {
                     shot2At = where();
                     step = "spinning up (2)";
                 }),
-                waitMs(SPIN_UP_2_MS),
+                waitForFlywheel(SPIN_UP_2_MS),
                 instant(() -> {
                     intake.setState(Intake.State.INTAKE);
                     transport.setState(Transport.State.FEED);
@@ -280,6 +291,11 @@ public class BiobuzzBlueAuto extends OpMode {
     private String where() {
         Pose pose = follower.pose();
         return String.format("%.1f, %.1f, %.0f", pose.x(), pose.y(), Math.toDegrees(pose.heading()));
+    }
+
+    /** Waits until the flywheel is at speed, but never longer than maxMs. */
+    private Command waitForFlywheel(double maxMs) {
+        return race(waitUntil(shooter::atSpeed), waitMs(maxMs));
     }
 
     /** Follows a path, but moves on after PATH_TIMEOUT_MS even if the end is never reached. */
