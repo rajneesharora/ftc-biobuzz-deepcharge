@@ -1,12 +1,16 @@
 package org.firstinspires.ftc.teamcode.teleop;
 
+import android.os.SystemClock;
+
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.Gamepad;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.drive.DriveTrain;
+import org.firstinspires.ftc.teamcode.lib.Battery;
 import org.firstinspires.ftc.teamcode.lib.Button;
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 import org.firstinspires.ftc.teamcode.subsystems.FlowerGate;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.Shooter;
@@ -40,6 +44,9 @@ import org.firstinspires.ftc.teamcode.subsystems.Transport;
  *   Y (hold)          rotate the flower gate servo
  *
  * Brake/coast is START_IN_BRAKE_MODE in Panels (DirectMecanumDrive); X is the gate now.
+ *
+ * Every loop, from INIT to STOP, is written to /sdcard/FIRST/analysis/teleop_*.csv by
+ * MatchRecorder: both gamepads, the drive command, pose, and every mechanism.
  */
 public abstract class BioBuzzTeleOpBase extends LinearOpMode {
 
@@ -55,6 +62,12 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
     private Transport transport;
     private Shooter shooter;
     private FlowerGate flowerGate;
+
+    private MatchRecorder recorder;
+    private int lastGamepadId;
+    private int lastOperatorId;
+    // What updateDriving() sent to the drivetrain this loop, for the recording.
+    private double cmdForward, cmdLeft, cmdTurn;
 
     /** Field heading that counts as "away from the driver". Set at start and by button A. */
     private double driverForwardHeading;
@@ -86,17 +99,36 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
         shooter = new Shooter(hardwareMap);
         flowerGate = new FlowerGate(hardwareMap);
 
+        recorder = new MatchRecorder("teleop_" + drive.name().toLowerCase().replaceAll("[^a-z]+", "_")
+                .replaceAll("_$", ""), new Battery(hardwareMap));
+        lastGamepadId = gamepad1.getGamepadId();
+        lastOperatorId = gamepad2.getGamepadId();
+        try {
+            runRecorded();
+        } catch (RuntimeException e) {
+            // Get the crash into the file before the OpMode dies.
+            recorder.event("CRASH " + e);
+            recorder.endLoop();
+            throw e;
+        } finally {
+            recorder.close();
+        }
+    }
+
+    private void runRecorded() {
         // INIT: keep the sensors running so heading/pose are live before PLAY.
         while (opModeInInit()) {
             drive.update();
             dashboard.addLine("BioBuzz TeleOp [" + drive.name() + "] ready. Press PLAY.");
             drive.report(dashboard);
             dashboard.update();
+            recordLoop();
         }
         if (isStopRequested()) {
             return;
         }
 
+        recorder.setPhase("RUN");
         driverForwardHeading = drive.heading();
 
         while (opModeIsActive()) {
@@ -105,6 +137,7 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
             drive.update();
             updateMechanisms();
             updateDashboard();
+            recordLoop();
         }
 
         drive.stop();
@@ -112,6 +145,8 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
         transport.stop();
         shooter.stop();
         flowerGate.stop();
+        recorder.setPhase("STOP");
+        recorder.endLoop();
     }
 
     /** Reads the gamepads once, so everything below sees the same thing. */
@@ -134,6 +169,9 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
 
         if (lockPosition.down()) {
             drive.lock(lockPosition.pressed());
+            cmdForward = 0;
+            cmdLeft = 0;
+            cmdTurn = 0;
             return;
         }
 
@@ -162,7 +200,10 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
             speed = DriverSettings.TURBO_SPEED;
         }
 
-        drive.drive(forward * speed, left * speed, turn * speed);
+        cmdForward = forward * speed;
+        cmdLeft = left * speed;
+        cmdTurn = turn * speed;
+        drive.drive(cmdForward, cmdLeft, cmdTurn);
     }
 
     private void updateMechanisms() {
@@ -208,6 +249,102 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
         flowerGate.report(dashboard);
 
         dashboard.update();
+    }
+
+    /**
+     * One row of the match recording: what the driver did, what the code asked the drivetrain
+     * for, and what every part of the robot was doing.
+     *
+     * Reading it: raw_* is the driver's gamepad straight from the Driver Station. If raw_* moves
+     * but cmd_* doesn't, the problem is in the code. If raw_* freezes or gamepad_id changes, it's
+     * the gamepad or the DS link. If merged_* differs from raw_*, a browser gamepad in Panels is
+     * overriding the driver. operator_* is gamepad 2, which runs the mechanisms. A big loop_ms
+     * means the loop stalled while the motors kept their last power.
+     */
+    private void recordLoop() {
+        recorder.put("uptime_ms", SystemClock.uptimeMillis());
+        recorder.put("gamepad_id", gamepad1.getGamepadId());
+        recorder.put("gamepad_timestamp", gamepad1.timestamp);
+        recordGamepad("raw", gamepad1);
+        recordGamepad("merged", pad);   // null until PLAY, when readGamepad() first runs
+        recorder.put("operator_id", gamepad2.getGamepadId());
+        recorder.put("operator_timestamp", gamepad2.timestamp);
+        recordGamepad("operator", gamepad2);
+
+        boolean running = pad != null;
+        recorder.put("cmd_forward", running ? cmdForward : null);
+        recorder.put("cmd_left", running ? cmdLeft : null);
+        recorder.put("cmd_turn", running ? cmdTurn : null);
+        recorder.put("drive_mode", !running ? null : lockPosition.down() ? "LOCKED"
+                : DriverSettings.FIELD_CENTRIC ? "FIELD" : "ROBOT");
+        recorder.put("speed_mode", !running ? null
+                : slowMode.down() ? "SLOW" : turboMode.down() ? "TURBO" : "NORMAL");
+        drive.record(recorder);
+        intake.record(recorder);
+        transport.record(recorder);
+        shooter.record(recorder);
+        flowerGate.record(recorder);
+
+        int gamepadId = gamepad1.getGamepadId();
+        if (gamepadId != lastGamepadId) {
+            recorder.event("gamepad1 id " + lastGamepadId + " -> " + gamepadId);
+            lastGamepadId = gamepadId;
+        }
+        int operatorId = gamepad2.getGamepadId();
+        if (operatorId != lastOperatorId) {
+            recorder.event("gamepad2 id " + lastOperatorId + " -> " + operatorId);
+            lastOperatorId = operatorId;
+        }
+        if (running) {
+            eventIf(intakeOn.pressed(), intakeOn.isOn() ? "intake on" : "intake off");
+            eventIf(eject.pressed(), "eject start");
+            eventIf(eject.released(), "eject end");
+            eventIf(shooterStart.pressed(), "flywheel start");
+            eventIf(shooterStop.pressed(), "flywheel stop");
+            eventIf(shoot.pressed(), "shoot start");
+            eventIf(shoot.released(), "shoot end");
+            eventIf(lockPosition.pressed(), "lock");
+            eventIf(lockPosition.released(), "unlock");
+            eventIf(resetForward.pressed(), "reset forward");
+            eventIf(toggleCentric.pressed(), DriverSettings.FIELD_CENTRIC ? "field-centric" : "robot-centric");
+            eventIf(velocityMode.pressed(), "velocity mode toggled");
+            eventIf(flower.pressed(), "flower gate start");
+            eventIf(flower.released(), "flower gate stop");
+        }
+        recorder.endLoop();
+    }
+
+    private void recordGamepad(String prefix, Gamepad g) {
+        recorder.put(prefix + "_lx", g == null ? null : g.left_stick_x);
+        recorder.put(prefix + "_ly", g == null ? null : g.left_stick_y);
+        recorder.put(prefix + "_rx", g == null ? null : g.right_stick_x);
+        recorder.put(prefix + "_lt", g == null ? null : g.left_trigger);
+        recorder.put(prefix + "_rt", g == null ? null : g.right_trigger);
+        recorder.put(prefix + "_buttons", g == null ? null : buttonsDown(g));
+    }
+
+    /** The buttons held right now, e.g. "A RB DU". Empty when none are. */
+    private static String buttonsDown(Gamepad g) {
+        StringBuilder held = new StringBuilder();
+        if (g.a) held.append("A ");
+        if (g.b) held.append("B ");
+        if (g.x) held.append("X ");
+        if (g.y) held.append("Y ");
+        if (g.left_bumper) held.append("LB ");
+        if (g.right_bumper) held.append("RB ");
+        if (g.dpad_up) held.append("DU ");
+        if (g.dpad_down) held.append("DD ");
+        if (g.dpad_left) held.append("DL ");
+        if (g.dpad_right) held.append("DR ");
+        if (g.back) held.append("BACK ");
+        if (g.start) held.append("START ");
+        return held.toString().trim();
+    }
+
+    private void eventIf(boolean happened, String text) {
+        if (happened) {
+            recorder.event(text);
+        }
     }
 
     private static double deadzone(double stick) {

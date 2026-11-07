@@ -6,6 +6,7 @@ import com.pedropathing.math.Pose;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 import org.firstinspires.ftc.teamcode.lib.PoseStorage;
 import org.firstinspires.ftc.teamcode.pedro.Constants;
 
@@ -78,6 +79,21 @@ public class PedroDrive implements DriveTrain {
     public void report(Dashboard dashboard) {
         dashboard.addData("Start pose", startSource);
         dashboard.showPose(follower.pose());
+    }
+
+    @Override
+    public void record(MatchRecorder recorder) {
+        Pose pose = follower.pose();
+        recorder.put("x", pose.x());
+        recorder.put("y", pose.y());
+        recorder.put("heading_deg", Math.toDegrees(pose.heading()));
+        recorder.put("pedro_mode", modeName(follower));
+    }
+
+    /** What the Follower is doing: MANUAL, HOLD, FOLLOW or IDLE. For the dashboard and recordings. */
+    public static String modeName(Follower follower) {
+        return follower.manual() ? "MANUAL" : follower.holding() ? "HOLD"
+                : follower.following() ? "FOLLOW" : "IDLE";
     }
 
     @Override

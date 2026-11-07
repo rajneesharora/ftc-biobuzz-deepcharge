@@ -10,6 +10,7 @@ import com.qualcomm.robotcore.hardware.IMU;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 
 /**
  * BACKUP drive: sets the four motor powers directly, like the other team's MecanumDrive.
@@ -152,6 +153,14 @@ public class DirectMecanumDrive implements DriveTrain {
         dashboard.addData("Motor mode", velocityMode ? "VELOCITY" : "RAW POWER");
         dashboard.addData("Heading (IMU deg)", Math.round(Math.toDegrees(heading)));
         dashboard.addLine("No odometry in backup mode -- position not tracked.");
+    }
+
+    @Override
+    public void record(MatchRecorder recorder) {
+        recorder.put("heading_deg", Math.toDegrees(heading));
+        recorder.put("brake_mode", brakeMode);
+        recorder.put("velocity_mode", velocityMode);
+        recorder.put("locked", locked);
     }
 
     @Override
