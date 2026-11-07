@@ -50,9 +50,13 @@ import java.util.Locale;
  * attempt is still logged, marked "no dip".
  *
  * The goal can be a single tag or a cluster (SDK 12 reports several tags read together as one
- * cluster, with a name but no id). GOAL_TAG empty = the nearest one in view; otherwise only a
- * detection whose id or name contains GOAL_TAG counts, e.g. "20" or "BlueAudience". Range is
- * averaged over the last RANGE_SAMPLES frames. A shot taken with no goal tag in view is still
+ * cluster, with a name but no id). GOAL_TAG empty = any game tag counts; otherwise a
+ * comma-separated list of ids and/or names, e.g. "42,43,44,45" or "BlueScoring" -- an id must
+ * match exactly, a name only has to contain the word. Of the tags that count, PICK_HIGHEST
+ * uses the highest one (largest z, so it doesn't change with distance or angle); tags within
+ * HEIGHT_TIE_IN of the highest count as equally high, and the one already in use is kept so
+ * the range doesn't jump between side-by-side tags. PICK_HIGHEST = false uses the nearest.
+ * Range is averaged over the last RANGE_SAMPLES frames. A shot taken with no goal tag in view is still
  * logged, with blank distance and angles.
  *
  * Each run saves to its own file, /sdcard/FIRST/shooter_shots_<date_time>.csv, rewritten after
@@ -65,8 +69,12 @@ import java.util.Locale;
 @TeleOp(name = "Shooter Tuning", group = "Diagnostics")
 public class ShooterTuning extends LinearOpMode {
 
-    /** Empty = nearest tag or cluster in view; otherwise its id or name must contain this. */
+    /** Empty = any game tag; otherwise comma-separated ids and/or names, e.g. "42,43,44,45". */
     public static String GOAL_TAG = "";
+    /** true = use the highest matching tag; false = the nearest. */
+    public static boolean PICK_HIGHEST = true;
+    /** Tags whose height (z) is within this of the highest count as equally high. */
+    public static double HEIGHT_TIE_IN = 3;
     public static double RPM_STEP = 50;
     public static double RPM_FINE_STEP = 10;
     public static double DRIVE_SPEED = 0.4;
@@ -115,7 +123,7 @@ public class ShooterTuning extends LinearOpMode {
     private final ArrayDeque<Double> ranges = new ArrayDeque<>();
     private final ElapsedTime sinceTagSeen = new ElapsedTime();
     private String goalId = "";
-    private double goalBearing, goalYaw, goalX, goalY;
+    private double goalBearing, goalYaw, goalX, goalY, goalZ;
     private String cameraSees = "--";
     private String tagsSeen = "--";
 
@@ -318,12 +326,12 @@ public class ShooterTuning extends LinearOpMode {
 
     /** Finds the goal (single tag or cluster) in this frame and adds its range to the average. */
     private void readGoalTag(TagCamera camera) {
-        AprilTagDetection goal = null;
-        String goalLabel = "";
+        List<AprilTagDetection> candidates = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
         int singles = 0, clusters = 0, unknown = 0, noPose = 0, filtered = 0;
         StringBuilder seen = new StringBuilder();
         for (AprilTagDetection tag : camera.tags()) {
-            String label;
+            String label, id = null;
             if (tag instanceof AprilTagSingleDetection) {
                 AprilTagSingleDetection single = (AprilTagSingleDetection) tag;
                 if (single.metadata == null) {
@@ -332,6 +340,7 @@ public class ShooterTuning extends LinearOpMode {
                     continue;
                 }
                 singles++;
+                id = String.valueOf(single.id);
                 label = single.id + " " + single.metadata.name;
             } else if (tag instanceof AprilTagClusterDetection) {
                 clusters++;
@@ -344,23 +353,52 @@ public class ShooterTuning extends LinearOpMode {
                 noPose++;
                 continue;
             }
-            if (!GOAL_TAG.isEmpty() && !label.toLowerCase().contains(GOAL_TAG.toLowerCase())) {
+            if (!isGoal(id, label)) {
                 filtered++;
                 continue;
             }
-            if (goal == null || tag.ftcPose.range < goal.ftcPose.range) {
-                goal = tag;
-                goalLabel = label;
-            }
+            candidates.add(tag);
+            labels.add(label);
         }
         cameraSees = singles + " tag(s), " + clusters + " cluster(s)"
                 + (unknown > 0 ? ", " + unknown + " unknown" : "")
                 + (noPose > 0 ? ", " + noPose + " without range" : "")
-                + (filtered > 0 ? ", " + filtered + " skipped (not '" + GOAL_TAG + "')" : "");
+                + (filtered > 0 ? ", " + filtered + " skipped (not in '" + GOAL_TAG + "')" : "");
         tagsSeen = seen.length() > 0 ? seen.toString() : "none";
-        if (goal == null) {
+        if (candidates.isEmpty()) {
             return;
         }
+
+        // Choose one: the highest (keeping the current one among equally high tags), or the nearest.
+        int chosen = 0;
+        if (PICK_HIGHEST) {
+            double highest = -Double.MAX_VALUE;
+            for (AprilTagDetection tag : candidates) {
+                highest = Math.max(highest, tag.ftcPose.z);
+            }
+            chosen = -1;
+            for (int i = 0; i < candidates.size(); i++) {
+                if (candidates.get(i).ftcPose.z < highest - HEIGHT_TIE_IN) {
+                    continue;   // clearly lower than the top tag(s)
+                }
+                if (labels.get(i).equals(goalId)) {
+                    chosen = i;   // still in view and still on top: keep it
+                    break;
+                }
+                if (chosen < 0 || candidates.get(i).ftcPose.range < candidates.get(chosen).ftcPose.range) {
+                    chosen = i;
+                }
+            }
+        } else {
+            for (int i = 1; i < candidates.size(); i++) {
+                if (candidates.get(i).ftcPose.range < candidates.get(chosen).ftcPose.range) {
+                    chosen = i;
+                }
+            }
+        }
+        AprilTagDetection goal = candidates.get(chosen);
+        String goalLabel = labels.get(chosen);
+
         if (!goalLabel.equals(goalId)) {
             ranges.clear();   // a different tag: don't average its range with the old one's
         }
@@ -369,11 +407,30 @@ public class ShooterTuning extends LinearOpMode {
         goalYaw = goal.ftcPose.yaw;
         goalX = goal.ftcPose.x;
         goalY = goal.ftcPose.y;
+        goalZ = goal.ftcPose.z;
         ranges.addLast(goal.ftcPose.range);
         while (ranges.size() > Math.max(1, RANGE_SAMPLES)) {
             ranges.removeFirst();
         }
         sinceTagSeen.reset();
+    }
+
+    /** True if GOAL_TAG is empty, or lists this tag's id exactly, or a word in its name. */
+    private static boolean isGoal(String id, String label) {
+        if (GOAL_TAG.trim().isEmpty()) {
+            return true;
+        }
+        for (String entry : GOAL_TAG.split(",")) {
+            String want = entry.trim();
+            if (want.isEmpty()) {
+                continue;
+            }
+            boolean isNumber = want.matches("\\d+");
+            if (isNumber ? want.equals(id) : label.toLowerCase().contains(want.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean tagInView() {
@@ -389,11 +446,12 @@ public class ShooterTuning extends LinearOpMode {
     }
 
     private void showGoal(Dashboard dashboard) {
-        dashboard.section("GOAL TAG" + (GOAL_TAG.isEmpty() ? " (nearest)" : " ('" + GOAL_TAG + "' only)"));
+        dashboard.section("GOAL TAG" + (GOAL_TAG.trim().isEmpty() ? " (any)" : " ('" + GOAL_TAG + "')")
+                + (PICK_HIGHEST ? ", highest" : ", nearest"));
         dashboard.addData("Camera sees", cameraSees);
         dashboard.addData("Tags in view (id name)", tagsSeen);
         if (tagInView()) {
-            dashboard.addData("Goal", goalId);
+            dashboard.addData("Goal", goalId + "  (height z " + round1(goalZ) + " in)");
             dashboard.addData("Range (avg, in)", round1(averageRange()));
             dashboard.addData("Bearing / yaw (deg)", round1(goalBearing) + " / " + round1(goalYaw)
                     + "  (bearing + = goal to the left)");
