@@ -24,7 +24,7 @@ import static com.pedropathing.ivy.groups.Groups.sequential;
 import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 
 /**
- * Red, flower only: no intake, transport or shooter.
+ * Red, flower: no intake, transport or shooter.
  *
  *   1  from START (same as BiobuzzRedAuto, pressed against the x = 0 wall), drive straight
  *      off the wall to OFF_WALL without turning -- turning right at the wall would swing a
@@ -32,7 +32,14 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  *   2  curve to FLOWER through CURVE_CONTROL, turning TURN_DEG on the way (negative =
  *      clockwise) -- a curve, not a straight line, so it stays clear of the basket floor
  *   3  flower servo to FLOWER_POSITION, then wait FLOWER_WAIT_MS for it to get there
- *   4  drive BACKWARD_IN straight backward (away from the way the robot now faces) and hold
+ *   4  drive BACKWARD_IN straight backward (away from the way the robot now faces)
+ *   5  stay there for STAY_MS
+ *   6  drive BACKWARD_2_IN further backward
+ *   7  flower servo back to FLOWER_REST_POSITION, wait FLOWER_WAIT_MS
+ *   8  drive straight forward to AWAY, still not turning -- it is right by the top wall and
+ *      the flower, where turning would swing a corner into them
+ *   9  curve to SHOOT through SHOOT_CONTROL, turning SHOOT_TURN_DEG more (negative =
+ *      clockwise), to the spot where BiobuzzRedAuto shoots its second load, and hold
  *
  * The flower servo is not moved before step 3, so it doesn't jump at INIT or PLAY.
  *
@@ -51,18 +58,32 @@ public class BiobuzzRedFlower extends OpMode {
     /** Straight off the wall first, keeping the start heading. */
     public static double OFF_WALL_X = 21, OFF_WALL_Y = 80;
     /** Where the curve ends, and the point it bows through (the robot does not drive through it). */
-    public static double FLOWER_X = 48, FLOWER_Y = 120;
-    public static double CURVE_CONTROL_X = 21, CURVE_CONTROL_Y = 112;
+    public static double FLOWER_X = 54, FLOWER_Y = 112;
+    public static double CURVE_CONTROL_X = 21, CURVE_CONTROL_Y = 108;
     /** Turn during the curve. -90 = 90 degrees clockwise; +90 would be anti-clockwise. */
     public static double TURN_DEG = -90;
 
     public static String FLOWER_SERVO_NAME = "flowerGate";
     public static double FLOWER_POSITION = 0.65;
+    /** Where the flower servo goes after the second pull back. */
+    public static double FLOWER_REST_POSITION = 0.1;
     /** Time for the servo to reach FLOWER_POSITION before driving on. */
     public static double FLOWER_WAIT_MS = 500;
 
     /** How far to drive straight backward after the flower servo moves. */
-    public static double BACKWARD_IN = 12;
+    public static double BACKWARD_IN = 10;
+    /** How long to stay there before the second pull back. */
+    public static double STAY_MS = 2000;
+    /** Second pull back, after STAY_MS. */
+    public static double BACKWARD_2_IN = 12;
+
+    /** Off the top wall and the flower before turning, keeping the same heading. */
+    public static double AWAY_X = 54, AWAY_Y = 120;
+    /** Shooting spot (same as BiobuzzRedAuto's second shot area), and the curve's bend point. */
+    public static double SHOOT_X = 120, SHOOT_Y = 84;
+    public static double SHOOT_CONTROL_X = 108, SHOOT_CONTROL_Y = 110;
+    /** Turn on the way to SHOOT. -90 = another 90 degrees clockwise. */
+    public static double SHOOT_TURN_DEG = -90;
 
     /** Safety limit: give up on a drive after this long and carry on. */
     public static double PATH_TIMEOUT_MS = 5000;
@@ -111,12 +132,19 @@ public class BiobuzzRedFlower extends OpMode {
         Pose atFlower = p.of(FLOWER_X, FLOWER_Y, flowerHeading);
         double h = Math.toRadians(flowerHeading);
         Pose behind = p.of(FLOWER_X - BACKWARD_IN * Math.cos(h), FLOWER_Y - BACKWARD_IN * Math.sin(h), flowerHeading);
+        Pose behind2 = p.of(behind.x() - BACKWARD_2_IN * Math.cos(h), behind.y() - BACKWARD_2_IN * Math.sin(h), flowerHeading);
+        Pose away = p.of(AWAY_X, AWAY_Y, flowerHeading);
+        Pose shoot = p.of(SHOOT_X, SHOOT_Y, flowerHeading + SHOOT_TURN_DEG);
         follower.setPose(start);
 
         Path awayFromWall = line(start, offWall).constant(start);
         Path toFlower = curve(offWall, p.of(CURVE_CONTROL_X, CURVE_CONTROL_Y, flowerHeading), atFlower)
                 .linear(offWall, atFlower);
         Path backward = line(atFlower, behind).constant(atFlower);
+        Path backward2 = line(behind, behind2).constant(atFlower);
+        Path offTheWall = line(behind2, away).constant(atFlower);
+        Path toShoot = curve(away, p.of(SHOOT_CONTROL_X, SHOOT_CONTROL_Y, flowerHeading), shoot)
+                .linear(away, shoot);
 
         step = "off the wall";
         schedule(sequential(
@@ -137,9 +165,38 @@ public class BiobuzzRedFlower extends OpMode {
                 }),
                 waitMs(FLOWER_WAIT_MS),
 
-                // 4. Straight backward, then hold.
+                // 4. Straight backward.
                 instant(() -> step = "backward " + BACKWARD_IN + " in"),
                 driveWithTimeout(backward),
+
+                // 5. Stay.
+                instant(() -> {
+                    follower.hold(follower.pose());
+                    step = "staying " + STAY_MS + " ms";
+                }),
+                waitMs(STAY_MS),
+
+                // 6. Further backward.
+                instant(() -> step = "backward " + BACKWARD_2_IN + " in"),
+                driveWithTimeout(backward2),
+
+                // 7. Flower servo back.
+                instant(() -> {
+                    follower.hold(follower.pose());
+                    if (flowerServo != null) {
+                        flowerServo.setPosition(FLOWER_REST_POSITION);
+                    }
+                    step = "flower servo to " + FLOWER_REST_POSITION;
+                }),
+                waitMs(FLOWER_WAIT_MS),
+
+                // 8. Off the wall and the flower, still not turning.
+                instant(() -> step = "moving away from the wall"),
+                driveWithTimeout(offTheWall),
+
+                // 9. Curve to the shooting spot, turning on the way, then hold.
+                instant(() -> step = "curving to the shooting spot"),
+                driveWithTimeout(toShoot),
                 instant(() -> {
                     follower.hold(follower.pose());
                     endedAt = where();
