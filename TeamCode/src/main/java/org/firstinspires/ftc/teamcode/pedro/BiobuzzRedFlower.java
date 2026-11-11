@@ -75,7 +75,7 @@ public class BiobuzzRedFlower extends OpMode {
     /** How long to stay there before the second pull back. */
     public static double STAY_MS = 2000;
     /** Second pull back, after STAY_MS. */
-    public static double BACKWARD_2_IN = 12;
+    public static double BACKWARD_2_IN = 1;
 
     /** Off the top wall and the flower before turning, keeping the same heading. */
     public static double AWAY_X = 54, AWAY_Y = 120;
