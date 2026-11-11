@@ -26,6 +26,8 @@ import java.util.Set;
  *   D-pad Up / Down   select the previous / next port (the old one stops)
  *   A (hold)          run forward      (servo: move position up)
  *   B (hold)          run backward     (servo: move position down)
+ *   D-pad Right/Left  servo only: position +/- SERVO_STEP per click (0.1)
+ *   right/left bumper servo only: position +/- SERVO_FINE_STEP per click (0.01)
  *
  * Encoders: every motor line shows its encoder count. Turn a wheel by hand and see which
  * line changes -- that is the port its encoder cable is in. It must match its motor's port.
@@ -44,6 +46,10 @@ public class PortFinder extends LinearOpMode {
     public static double CR_SERVO_POWER = 0.5;
     /** How fast a positional servo moves while A/B is held, in position units per second. */
     public static double SERVO_SPEED = 0.25;
+    /** Positional servo: how far one D-pad Right/Left click moves it. */
+    public static double SERVO_STEP = 0.1;
+    /** Positional servo: how far one bumper click moves it. */
+    public static double SERVO_FINE_STEP = 0.01;
 
     private enum Kind {
         MOTOR("motor"), CR_SERVO("CR servo"), SERVO("servo");
@@ -86,6 +92,10 @@ public class PortFinder extends LinearOpMode {
         Button.Group buttons = new Button.Group();
         Button previous = buttons.add(() -> gamepad1.dpad_up);
         Button next = buttons.add(() -> gamepad1.dpad_down);
+        Button stepUp = buttons.add(() -> gamepad1.dpad_right);
+        Button stepDown = buttons.add(() -> gamepad1.dpad_left);
+        Button fineUp = buttons.add(() -> gamepad1.right_bumper);
+        Button fineDown = buttons.add(() -> gamepad1.left_bumper);
 
         while (opModeInInit()) {
             dashboard.addLine("Port Finder -- " + ports.size() + " devices in the active config.");
@@ -117,8 +127,19 @@ public class PortFinder extends LinearOpMode {
             Port port = ports.get(selected);
             double direction = gamepad1.a ? 1 : gamepad1.b ? -1 : 0;
             run(port, direction, dt);
+            if (port.kind == Kind.SERVO) {
+                double step = (stepUp.pressed() ? SERVO_STEP : 0) - (stepDown.pressed() ? SERVO_STEP : 0)
+                        + (fineUp.pressed() ? SERVO_FINE_STEP : 0) - (fineDown.pressed() ? SERVO_FINE_STEP : 0);
+                if (step != 0) {
+                    port.servoPosition = Range.clip(port.servoPosition + step, 0, 1);
+                    ((Servo) port.device).setPosition(port.servoPosition);
+                }
+            }
 
             dashboard.addLine("D-pad Up/Down select   A forward   B backward");
+            if (port.kind == Kind.SERVO) {
+                dashboard.addLine("Servo: D-pad Right/Left +/-" + SERVO_STEP + "   bumpers +/-" + SERVO_FINE_STEP);
+            }
             dashboard.section("SELECTED (" + (selected + 1) + " of " + ports.size() + ")");
             dashboard.addLine(port.label());
             if (port.kind == Kind.SERVO) {
