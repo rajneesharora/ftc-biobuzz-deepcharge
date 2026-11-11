@@ -35,9 +35,9 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  *   4  drive BACKWARD_IN straight backward (away from the way the robot now faces)
  *   5  stay there for STAY_MS
  *   6  drive BACKWARD_2_IN further backward
- *   7  flower servo back to FLOWER_REST_POSITION, wait FLOWER_WAIT_MS
- *   8  drive straight forward to AWAY, still not turning -- it is right by the top wall and
- *      the flower, where turning would swing a corner into them
+ *   7  drive FORWARD_IN straight forward, still not turning -- it is right by the top wall
+ *      and the flower, where turning would swing a corner into them
+ *   8  flower servo back to FLOWER_REST_POSITION, wait FLOWER_WAIT_MS
  *   9  curve to SHOOT through SHOOT_CONTROL, turning SHOOT_TURN_DEG more (negative =
  *      clockwise), to the spot where BiobuzzRedAuto shoots its second load, and hold
  *
@@ -77,8 +77,8 @@ public class BiobuzzRedFlower extends OpMode {
     /** Second pull back, after STAY_MS. */
     public static double BACKWARD_2_IN = 1;
 
-    /** Off the top wall and the flower before turning, keeping the same heading. */
-    public static double AWAY_X = 54, AWAY_Y = 120;
+    /** Straight forward after the second pull back, before the servo goes back (no turning). */
+    public static double FORWARD_IN = 10;
     /** Shooting spot (same as BiobuzzRedAuto's second shot area), and the curve's bend point. */
     public static double SHOOT_X = 120, SHOOT_Y = 84;
     public static double SHOOT_CONTROL_X = 108, SHOOT_CONTROL_Y = 110;
@@ -133,7 +133,7 @@ public class BiobuzzRedFlower extends OpMode {
         double h = Math.toRadians(flowerHeading);
         Pose behind = p.of(FLOWER_X - BACKWARD_IN * Math.cos(h), FLOWER_Y - BACKWARD_IN * Math.sin(h), flowerHeading);
         Pose behind2 = p.of(behind.x() - BACKWARD_2_IN * Math.cos(h), behind.y() - BACKWARD_2_IN * Math.sin(h), flowerHeading);
-        Pose away = p.of(AWAY_X, AWAY_Y, flowerHeading);
+        Pose away = p.of(behind2.x() + FORWARD_IN * Math.cos(h), behind2.y() + FORWARD_IN * Math.sin(h), flowerHeading);
         Pose shoot = p.of(SHOOT_X, SHOOT_Y, flowerHeading + SHOOT_TURN_DEG);
         follower.setPose(start);
 
@@ -180,7 +180,11 @@ public class BiobuzzRedFlower extends OpMode {
                 instant(() -> step = "backward " + BACKWARD_2_IN + " in"),
                 driveWithTimeout(backward2),
 
-                // 7. Flower servo back.
+                // 7. Forward, off the wall and the flower, still not turning.
+                instant(() -> step = "forward " + FORWARD_IN + " in"),
+                driveWithTimeout(offTheWall),
+
+                // 8. Flower servo back.
                 instant(() -> {
                     follower.hold(follower.pose());
                     if (flowerServo != null) {
@@ -189,10 +193,6 @@ public class BiobuzzRedFlower extends OpMode {
                     step = "flower servo to " + FLOWER_REST_POSITION;
                 }),
                 waitMs(FLOWER_WAIT_MS),
-
-                // 8. Off the wall and the flower, still not turning.
-                instant(() -> step = "moving away from the wall"),
-                driveWithTimeout(offTheWall),
 
                 // 9. Curve to the shooting spot, turning on the way, then hold.
                 instant(() -> step = "curving to the shooting spot"),
