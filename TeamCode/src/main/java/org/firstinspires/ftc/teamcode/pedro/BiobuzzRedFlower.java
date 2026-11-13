@@ -38,8 +38,10 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  *   7  drive FORWARD_IN straight forward, still not turning -- it is right by the top wall
  *      and the flower, where turning would swing a corner into them
  *   8  flower servo back to FLOWER_REST_POSITION, wait FLOWER_WAIT_MS
- *   9  curve to SHOOT through SHOOT_CONTROL, turning SHOOT_TURN_DEG more (negative =
- *      clockwise), to the spot where BiobuzzRedAuto shoots its second load
+ *   9  straight across at a high y to CROSS, still not turning -- low through the middle it
+ *      hits the hive base -- then curve down to SHOOT through SHOOT_CONTROL, turning
+ *      SHOOT_TURN_DEG more (negative = clockwise), to where BiobuzzRedAuto shoots its second
+ *      load. Coming in low keeps it off the second flower at (144, 96).
  *  10  drive SHOOT_FORWARD_IN straight forward
  *  11  flower servo down again (FLOWER_POSITION), wait FLOWER_WAIT_MS
  *  12  drive to the second flower spot: SHOOT's x, SHOOT's y + FLOWER_2_DY
@@ -86,9 +88,11 @@ public class BiobuzzRedFlower extends OpMode {
 
     /** Straight forward after the second pull back, before the servo goes back (no turning). */
     public static double FORWARD_IN = 10;
+    /** End of the straight crossing at a high y (same as BiobuzzRedAuto's crossing). */
+    public static double CROSS_X = 108, CROSS_Y = 106;
     /** Shooting spot (same as BiobuzzRedAuto's second shot area), and the curve's bend point. */
     public static double SHOOT_X = 134, SHOOT_Y = 69;
-    public static double SHOOT_CONTROL_X = 108, SHOOT_CONTROL_Y = 110;
+    public static double SHOOT_CONTROL_X = 115, SHOOT_CONTROL_Y = 72;
     /** Turn on the way to SHOOT. -90 = another 90 degrees clockwise. */
     public static double SHOOT_TURN_DEG = -90;
 
@@ -163,8 +167,10 @@ public class BiobuzzRedFlower extends OpMode {
         Path backward = line(atFlower, behind).constant(atFlower);
         Path backward2 = line(behind, behind2).constant(atFlower);
         Path offTheWall = line(behind2, away).constant(atFlower);
-        Path toShoot = curve(away, p.of(SHOOT_CONTROL_X, SHOOT_CONTROL_Y, flowerHeading), shoot)
-                .linear(away, shoot);
+        Pose cross = p.of(CROSS_X, CROSS_Y, flowerHeading);
+        Path across = line(away, cross).constant(away);
+        Path toShoot = curve(cross, p.of(SHOOT_CONTROL_X, SHOOT_CONTROL_Y, flowerHeading), shoot)
+                .linear(cross, shoot);
         Path shootForward = line(shoot, shootAhead).constant(shoot);
         Path toFlower2 = line(shootAhead, flower2).constant(shoot);
         Path flower2Forward = line(flower2, flower2Ahead).constant(shoot);
@@ -218,7 +224,9 @@ public class BiobuzzRedFlower extends OpMode {
                 }),
                 waitMs(FLOWER_WAIT_MS),
 
-                // 9. Curve to the shooting spot, turning on the way.
+                // 9. Across at a high y, then curve down to the shooting spot, turning on the way.
+                instant(() -> step = "crossing (high, past the hive)"),
+                driveWithTimeout(across),
                 instant(() -> step = "curving to the shooting spot"),
                 driveWithTimeout(toShoot),
 
