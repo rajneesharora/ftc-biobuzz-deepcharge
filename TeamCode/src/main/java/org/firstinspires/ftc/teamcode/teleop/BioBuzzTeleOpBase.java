@@ -31,15 +31,16 @@ import org.firstinspires.ftc.teamcode.subsystems.Transport;
  *   Y                 backup only: switch velocity / raw power (needs drive encoders!)
  *
  * OPERATOR -- gamepad 2:
- *   right bumper      toggle intake + transport (keeps running until pressed again)
+ *   right bumper      toggle intake (keeps running until pressed again). With a gate
+ *                     (Transport.RUN_WITH_INTAKE) the transport runs with it too.
  *   left bumper       hold to unjam (intake and transport backwards)
- *   D-pad Up          start shooter flywheel
+ *   D-pad Up          start shooter flywheel (both motors)
  *   D-pad Down        stop shooter flywheel
- *   X (hold)          shooter gate only (no speed check). Keep right bumper on to feed more
- *                     balls up while shooting.
- *   Y (hold)          rotate the flower gate servo
+ *   X (hold)          shoot: no gate on this robot, so X runs the transport, pushing balls into
+ *                     the flywheels (no speed check -- wait for "Ready to fire")
+ *   Y (hold)          flower gate down (FlowerGate.ROTATED_POSITION); let go = up
  *
- * Brake/coast is START_IN_BRAKE_MODE in Panels (DirectMecanumDrive); X is the gate now.
+ * Brake/coast is START_IN_BRAKE_MODE in Panels (DirectMecanumDrive).
  */
 public abstract class BioBuzzTeleOpBase extends LinearOpMode {
 
