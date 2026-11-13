@@ -87,16 +87,16 @@ public class BiobuzzRedFlower extends OpMode {
     public static double TURN_DEG = -90;
 
     public static String FLOWER_SERVO_NAME = "flowerGate";
-    public static double FLOWER_POSITION = 0.65;
+    public static double FLOWER_POSITION = 0.7;
     /** Where the flower servo goes after the second pull back. */
     public static double FLOWER_REST_POSITION = 0.1;
     /** Time for the servo to reach FLOWER_POSITION before driving on. */
-    public static double FLOWER_WAIT_MS = 500;
+    public static double FLOWER_WAIT_MS = 1000;
 
     /** How far to drive straight backward after the flower servo moves. */
-    public static double BACKWARD_IN = 10;
+    public static double BACKWARD_IN = 11;
     /** How long to stay there before the second pull back. */
-    public static double STAY_MS = 500;
+    public static double STAY_MS = 1000;
     /** Second pull back, after STAY_MS. */
     public static double BACKWARD_2_IN = 0.1;
 
@@ -105,23 +105,23 @@ public class BiobuzzRedFlower extends OpMode {
     /** End of the straight crossing at a high y (same as BiobuzzRedAuto's crossing). */
     public static double CROSS_X = 108, CROSS_Y = 106;
     /** Shooting spot (same as BiobuzzRedAuto's second shot area), and the curve's bend point. */
-    public static double SHOOT_X = 134, SHOOT_Y = 69;
+    public static double SHOOT_X = 134, SHOOT_Y = 70;
     public static double SHOOT_CONTROL_X = 115, SHOOT_CONTROL_Y = 72;
     /** Turn on the way to SHOOT. -90 = another 90 degrees clockwise. */
     public static double SHOOT_TURN_DEG = -90;
 
     /** After reaching SHOOT: straight forward this far before the flower servo goes down. */
-    public static double SHOOT_FORWARD_IN = 10;
+    public static double SHOOT_FORWARD_IN = 12;
     /** Second flower spot: SHOOT's x, and this much more y than SHOOT. */
-    public static double FLOWER_2_DY = 10;
+    public static double FLOWER_2_DY = 17;
     /** How long to stay at the second flower spot, picking up. */
-    public static double FLOWER_2_STAY_MS = 500;
+    public static double FLOWER_2_STAY_MS = 1000;
     /** From the second flower spot: straight forward this far before the servo goes up. */
-    public static double FLOWER_2_FORWARD_IN = 10;
+    public static double FLOWER_2_FORWARD_IN = 12;
 
     /** Parking spot (same as BiobuzzRedAuto), and the point the curve bows through. */
-    public static double PARK_X = 90, PARK_Y = 117;
-    public static double PARK_CONTROL_X = 100, PARK_CONTROL_Y = 78;
+    public static double PARK_X = 96, PARK_Y = 119;
+    public static double PARK_CONTROL_X = 100, PARK_CONTROL_Y = 83;
 
     /** Flywheel spin-up before the first shot (it starts at PLAY and runs until parking). */
     public static double SPIN_UP_MS = 2000;
