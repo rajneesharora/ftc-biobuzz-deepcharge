@@ -41,7 +41,8 @@ public class Transport implements Subsystem {
     private final CRServo left;
     private final CRServo right;
     private final String status;
-    private State state = State.OFF;
+    private State state = State.OFF;        // left side (and both, when set with setState)
+    private State rightState = State.OFF;
     private boolean rightStopped = false;
     private final boolean leftReversedUsed = LEFT_REVERSED;    // what INIT actually used
     private final boolean rightReversedUsed = RIGHT_REVERSED;
@@ -66,8 +67,16 @@ public class Transport implements Subsystem {
         }
     }
 
+    /** Both sides the same. */
     public void setState(State state) {
         this.state = state;
+        this.rightState = state;
+    }
+
+    /** Each side on its own, e.g. left carrying balls in while right only feeds the shooter. */
+    public void setSides(State left, State right) {
+        this.state = left;
+        this.rightState = right;
     }
 
     public State getState() {
@@ -84,30 +93,33 @@ public class Transport implements Subsystem {
 
     @Override
     public void update() {
-        double power;
-        switch (state) {
-            case FEED:    power = FEED_POWER;    break;
-            case REVERSE: power = REVERSE_POWER; break;
-            default:      power = 0;             break;
-        }
         if (left != null) {
-            left.setPower(power);
+            left.setPower(powerFor(state));
         }
         if (right != null) {
-            right.setPower(rightStopped ? 0 : power);
+            right.setPower(rightStopped ? 0 : powerFor(rightState));
+        }
+    }
+
+    private static double powerFor(State state) {
+        switch (state) {
+            case FEED:    return FEED_POWER;
+            case REVERSE: return REVERSE_POWER;
+            default:      return 0;
         }
     }
 
     @Override
     public void report(Dashboard dashboard) {
         dashboard.section("TRANSPORT");
-        dashboard.addData("Transport", state + (rightStopped ? " (right held)" : "") + "  [" + status + "]");
+        dashboard.addData("Transport L / R", state + " / " + (rightStopped ? "held" : rightState) + "  [" + status + "]");
         dashboard.addData("LEFT / RIGHT_REVERSED (used at INIT)", leftReversedUsed + " / " + rightReversedUsed);
     }
 
     @Override
     public void stop() {
         state = State.OFF;
+        rightState = State.OFF;
         rightStopped = false;
         update();
     }

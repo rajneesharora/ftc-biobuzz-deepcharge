@@ -31,13 +31,15 @@ import org.firstinspires.ftc.teamcode.subsystems.Transport;
  *   Y                 backup only: switch velocity / raw power (needs drive encoders!)
  *
  * OPERATOR -- gamepad 2:
- *   right bumper      toggle intake (keeps running until pressed again). With a gate
- *                     (Transport.RUN_WITH_INTAKE) the transport runs with it too.
- *   left bumper       hold to unjam (intake and transport backwards)
+ *   right bumper      toggle intake + transportLeft (press on / press off): balls come in
+ *                     and wait, since transportRight stays still
+ *   left bumper       hold: intake + transportLeft + transportRight all backwards (unjam)
  *   D-pad Up          start shooter flywheel (both motors)
  *   D-pad Down        stop shooter flywheel
- *   X (hold)          shoot: no gate on this robot, so X runs the transport, pushing balls into
- *                     the flywheels (no speed check -- wait for "Ready to fire")
+ *   X (hold)          shoot: turns the flywheel on (it stays on until D-pad Down) and runs
+ *                     transportRight into it; also switches intake + transportLeft on if they
+ *                     were off (they stay on until right bumper). No speed check -- wait for
+ *                     "Ready to fire" before holding X for the best first shot.
  *   Y (hold)          flower gate down (FlowerGate.ROTATED_POSITION); let go = up
  *
  * Brake/coast is START_IN_BRAKE_MODE in Panels (DirectMecanumDrive).
@@ -169,21 +171,29 @@ public abstract class BioBuzzTeleOpBase extends LinearOpMode {
     private void updateMechanisms() {
         // Ejecting wins over the toggle and lasts only while held. The toggle is left alone,
         // so letting go puts the intake back to what it was doing.
+        // X shoots: flywheel on, and intake + transportLeft switched on if they were off (both
+        // stay on afterwards). Done before the toggle is read below, so it counts this loop.
+        if (shoot.down()) {
+            shooter.setSpinning(true);
+            intakeOn.setOn(true);
+        }
+
         if (eject.down()) {
+            // Unjam wins and lasts only while held; the toggle is left alone, so letting go
+            // puts things back to what they were doing.
             intake.setState(Intake.State.EJECT);
             transport.setState(Transport.State.REVERSE);
         } else {
             intake.setState(intakeOn.isOn() ? Intake.State.INTAKE : Intake.State.OFF);
-            // With a gate (RUN_WITH_INTAKE) the transport runs with the intake toggle only, so
-            // balls are carried up to the stopped gate and X opens just the gate. Without one,
-            // the transport is what feeds the wheel, so it runs while X is held.
-            boolean feed = Transport.RUN_WITH_INTAKE ? intakeOn.isOn() : shoot.down();
-            transport.setState(feed ? Transport.State.FEED : Transport.State.OFF);
+            // transportLeft carries balls in with the intake; transportRight only feeds the
+            // flywheel, while X is held.
+            transport.setSides(intakeOn.isOn() ? Transport.State.FEED : Transport.State.OFF,
+                    shoot.down() ? Transport.State.FEED : Transport.State.OFF);
         }
 
         if (shooterStart.pressed()) {
             shooter.setSpinning(true);
-        } else if (shooterStop.pressed()) {
+        } else if (shooterStop.pressed() && !shoot.down()) {
             shooter.setSpinning(false);
         }
         // Held X spins the gate whatever the flywheel speed (the driver's choice).
