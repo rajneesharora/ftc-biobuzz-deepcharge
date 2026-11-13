@@ -10,9 +10,13 @@ import com.pedropathing.paths.Path;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
 import org.firstinspires.ftc.teamcode.lib.PoseStorage;
+import org.firstinspires.ftc.teamcode.subsystems.Intake;
+import org.firstinspires.ftc.teamcode.subsystems.Shooter;
+import org.firstinspires.ftc.teamcode.subsystems.Transport;
 
 import static com.pedropathing.api.Paths.curve;
 import static com.pedropathing.api.Paths.line;
@@ -24,7 +28,15 @@ import static com.pedropathing.ivy.groups.Groups.sequential;
 import static com.pedropathing.ivy.pedro.PedroCommands.follow;
 
 /**
- * Red, flower: no intake, transport or shooter.
+ * Red, flower: shoot the preloads, pick up balls at two flowers, shoot each load, park.
+ *
+ * Mechanisms (this robot has no gate): the flywheel runs from PLAY until parking. While
+ * picking up, the intake + transportLeft run and transportRight stays still, so the balls
+ * wait. Shooting = transportRight on (with the intake + transportLeft) for SHOOT_MS.
+ * FEED_ON_ARRIVAL = true starts transportRight when the robot reaches the shooting spot;
+ * false starts it as soon as a flower pick-up is done, i.e. while still driving.
+ *
+ *   0  at START: wait SPIN_UP_MS for the flywheel, shoot the preloads for SHOOT_MS
  *
  *   1  from START (same as BiobuzzRedAuto, pressed against the x = 0 wall), drive straight
  *      off the wall to OFF_WALL without turning -- turning right at the wall would swing a
@@ -47,7 +59,7 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  *  12  drive to the second flower spot: SHOOT's x, SHOOT's y + FLOWER_2_DY
  *  13  drive FLOWER_2_FORWARD_IN straight forward
  *  14  flower servo up (FLOWER_REST_POSITION), wait FLOWER_WAIT_MS
- *  15  drive back to SHOOT
+ *  15  drive back to SHOOT and shoot that load for SHOOT_MS; flywheel, intake, transport off
  *  16  park at PARK (same as BiobuzzRedAuto's park), curving through PARK_CONTROL, and hold
  * Steps 10-16 keep the heading the robot had at SHOOT.
  *
@@ -108,6 +120,13 @@ public class BiobuzzRedFlower extends OpMode {
     public static double PARK_X = 90, PARK_Y = 117;
     public static double PARK_CONTROL_X = 100, PARK_CONTROL_Y = 78;
 
+    /** Flywheel spin-up before the first shot (it starts at PLAY and runs until parking). */
+    public static double SPIN_UP_MS = 2000;
+    /** How long transportRight feeds the flywheel for each load. Raise it if a ball is left. */
+    public static double SHOOT_MS = 1500;
+    /** true = start feeding when the robot reaches the shooting spot; false = right after a pick-up. */
+    public static boolean FEED_ON_ARRIVAL = true;
+
     /** Safety limit: give up on a drive after this long and carry on. */
     public static double PATH_TIMEOUT_MS = 5000;
 
@@ -116,6 +135,10 @@ public class BiobuzzRedFlower extends OpMode {
     private Follower follower;
     private Dashboard dashboard;
     private Servo flowerServo;   // null if missing from the robot config
+    private Intake intake;
+    private Transport transport;
+    private Shooter shooter;
+    private final ElapsedTime autoTimer = new ElapsedTime();
 
     private String step = "waiting for PLAY";
     /** Where the robot really ended up -- stays on screen. */
@@ -132,6 +155,9 @@ public class BiobuzzRedFlower extends OpMode {
         follower = Constants.create(hardwareMap);
         follower.setPose(startPose());
         flowerServo = hardwareMap.tryGet(Servo.class, FLOWER_SERVO_NAME);
+        intake = new Intake(hardwareMap);
+        transport = new Transport(hardwareMap);
+        shooter = new Shooter(hardwareMap);
     }
 
     @Override
@@ -184,8 +210,21 @@ public class BiobuzzRedFlower extends OpMode {
         Path toPark = curve(shoot, p.of(PARK_CONTROL_X, PARK_CONTROL_Y, shootHeading), park).constant(shoot);
 
         step = "off the wall";
+        autoTimer.reset();
+        shooter.setSpinning(true);
+        step = "flywheel spinning up";
         schedule(sequential(
+                // 0. Shoot the preloads, then go into pick-up mode (right side holds the balls).
+                waitMs(SPIN_UP_MS),
+                instant(() -> {
+                    feed();
+                    step = "shooting the preloads";
+                }),
+                waitMs(SHOOT_MS),
+                instant(this::pickUp),
+
                 // 1. Straight off the wall.
+                instant(() -> step = "off the wall"),
                 driveWithTimeout(awayFromWall),
 
                 // 2. Curve to the flower, turning on the way.
@@ -230,12 +269,20 @@ public class BiobuzzRedFlower extends OpMode {
                     step = "flower servo to " + FLOWER_REST_POSITION;
                 }),
                 waitMs(FLOWER_WAIT_MS),
+                instant(this::feedNowIfNotOnArrival),
 
                 // 9. Across at a high y, then curve down to the shooting spot, turning on the way.
                 instant(() -> step = "crossing (high, past the hive)"),
                 driveWithTimeout(across),
                 instant(() -> step = "curving to the shooting spot"),
                 driveWithTimeout(toShoot),
+                instant(() -> {
+                    follower.hold(follower.pose());
+                    feed();
+                    step = "shooting load 1";
+                }),
+                waitMs(SHOOT_MS),
+                instant(this::pickUp),
 
                 // 10. Forward.
                 instant(() -> step = "forward " + SHOOT_FORWARD_IN + " in"),
@@ -268,10 +315,22 @@ public class BiobuzzRedFlower extends OpMode {
                     step = "flower servo to " + FLOWER_REST_POSITION;
                 }),
                 waitMs(FLOWER_WAIT_MS),
+                instant(this::feedNowIfNotOnArrival),
 
-                // 15. Back to the shooting spot.
+                // 15. Back to the shooting spot and shoot; then everything off for parking.
                 instant(() -> step = "back to the shooting spot"),
                 driveWithTimeout(backToShoot),
+                instant(() -> {
+                    follower.hold(follower.pose());
+                    feed();
+                    step = "shooting load 2";
+                }),
+                waitMs(SHOOT_MS),
+                instant(() -> {
+                    shooter.setSpinning(false);
+                    intake.setState(Intake.State.OFF);
+                    transport.setState(Transport.State.OFF);
+                }),
 
                 // 16. Park, then hold.
                 instant(() -> step = "parking"),
@@ -279,9 +338,28 @@ public class BiobuzzRedFlower extends OpMode {
                 instant(() -> {
                     follower.hold(follower.pose());
                     endedAt = where();
-                    step = "done -- parked";
+                    step = "done -- parked at " + Math.round(autoTimer.seconds() * 10) / 10.0 + " s";
                 })
         ));
+    }
+
+    /** Pick-up mode: intake + transportLeft pull balls in; transportRight still, so they wait. */
+    private void pickUp() {
+        intake.setState(Intake.State.INTAKE);
+        transport.setSides(Transport.State.FEED, Transport.State.OFF);
+    }
+
+    /** Shoot: transportRight joins in and carries the balls into the (spinning) flywheel. */
+    private void feed() {
+        intake.setState(Intake.State.INTAKE);
+        transport.setSides(Transport.State.FEED, Transport.State.FEED);
+    }
+
+    /** FEED_ON_ARRIVAL = false: start feeding as soon as the pick-up is done. */
+    private void feedNowIfNotOnArrival() {
+        if (!FEED_ON_ARRIVAL) {
+            feed();
+        }
     }
 
     /** The robot's pose right now, as "x, y, heading" (inches, degrees). */
@@ -300,12 +378,20 @@ public class BiobuzzRedFlower extends OpMode {
         follower.update();
         Scheduler.execute();
 
+        intake.update();
+        transport.update();
+        shooter.update();
+
         Pose pose = follower.pose();
         PoseStorage.save(pose);
 
         dashboard.addData("Step", step);
+        dashboard.addData("Time (s)", Math.round(autoTimer.seconds() * 10) / 10.0 + "  (auto is 30 s)");
         dashboard.addData("Ended at", endedAt);
         dashboard.showPose(pose);
+        intake.report(dashboard);
+        transport.report(dashboard);
+        shooter.report(dashboard);
         dashboard.update();
     }
 
@@ -313,5 +399,8 @@ public class BiobuzzRedFlower extends OpMode {
     public void stop() {
         Scheduler.reset();
         follower.stop();
+        intake.stop();
+        transport.stop();
+        shooter.stop();
     }
 }
