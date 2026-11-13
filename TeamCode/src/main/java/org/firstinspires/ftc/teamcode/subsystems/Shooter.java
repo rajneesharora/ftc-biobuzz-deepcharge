@@ -51,8 +51,8 @@ public class Shooter implements Subsystem {
     /** Flip if the flywheels spin backwards (balls not shot out). Flip BOTH directions together. */
     public static boolean TOP_REVERSED = false;
     public static boolean BOTTOM_REVERSED = true;
-    /** false = only shooterTop is powered. Turn on once shooterTop alone is checked. */
-    public static boolean BOTTOM_ENABLED = false;
+    /** false = only shooterTop is powered (for re-checking directions). Checked: both work together. */
+    public static boolean BOTTOM_ENABLED = true;
     /** Encoder ticks per motor output revolution. goBILDA 5202/5203 bare (6000 RPM) = 28. */
     public static double TICKS_PER_REV = 28;
 
