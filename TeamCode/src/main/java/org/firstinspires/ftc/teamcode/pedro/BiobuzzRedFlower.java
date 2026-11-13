@@ -47,8 +47,9 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  *  12  drive to the second flower spot: SHOOT's x, SHOOT's y + FLOWER_2_DY
  *  13  drive FLOWER_2_FORWARD_IN straight forward
  *  14  flower servo up (FLOWER_REST_POSITION), wait FLOWER_WAIT_MS
- *  15  drive back to SHOOT and hold
- * Steps 10-15 keep the heading the robot had at SHOOT.
+ *  15  drive back to SHOOT
+ *  16  park at PARK (same as BiobuzzRedAuto's park), curving through PARK_CONTROL, and hold
+ * Steps 10-16 keep the heading the robot had at SHOOT.
  *
  * The flower servo is not moved before step 3, so it doesn't jump at INIT or PLAY.
  *
@@ -102,6 +103,10 @@ public class BiobuzzRedFlower extends OpMode {
     public static double FLOWER_2_DY = 10;
     /** From the second flower spot: straight forward this far before the servo goes up. */
     public static double FLOWER_2_FORWARD_IN = 10;
+
+    /** Parking spot (same as BiobuzzRedAuto), and the point the curve bows through. */
+    public static double PARK_X = 90, PARK_Y = 117;
+    public static double PARK_CONTROL_X = 100, PARK_CONTROL_Y = 78;
 
     /** Safety limit: give up on a drive after this long and carry on. */
     public static double PATH_TIMEOUT_MS = 5000;
@@ -175,6 +180,8 @@ public class BiobuzzRedFlower extends OpMode {
         Path toFlower2 = line(shootAhead, flower2).constant(shoot);
         Path flower2Forward = line(flower2, flower2Ahead).constant(shoot);
         Path backToShoot = line(flower2Ahead, shoot).constant(shoot);
+        Pose park = p.of(PARK_X, PARK_Y, shootHeading);
+        Path toPark = curve(shoot, p.of(PARK_CONTROL_X, PARK_CONTROL_Y, shootHeading), park).constant(shoot);
 
         step = "off the wall";
         schedule(sequential(
@@ -262,13 +269,17 @@ public class BiobuzzRedFlower extends OpMode {
                 }),
                 waitMs(FLOWER_WAIT_MS),
 
-                // 15. Back to the shooting spot, then hold.
+                // 15. Back to the shooting spot.
                 instant(() -> step = "back to the shooting spot"),
                 driveWithTimeout(backToShoot),
+
+                // 16. Park, then hold.
+                instant(() -> step = "parking"),
+                driveWithTimeout(toPark),
                 instant(() -> {
                     follower.hold(follower.pose());
                     endedAt = where();
-                    step = "done -- holding position";
+                    step = "done -- parked";
                 })
         ));
     }
