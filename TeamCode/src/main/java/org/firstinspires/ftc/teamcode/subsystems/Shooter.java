@@ -85,6 +85,8 @@ public class Shooter implements Subsystem {
     private final ElapsedTime voltageTimer = new ElapsedTime();
     private final ElapsedTime stalledTimer = new ElapsedTime();
     private boolean encoderFault = false;
+    private final boolean topReversedUsed = TOP_REVERSED;      // what INIT actually used
+    private final boolean bottomReversedUsed = BOTTOM_REVERSED;
 
     public Shooter(HardwareMap hardwareMap) {
         top = ENABLED ? hardwareMap.tryGet(DcMotorEx.class, TOP_NAME) : null;
@@ -218,6 +220,7 @@ public class Shooter implements Subsystem {
         dashboard.addData("Bottom encoder RPM", Math.round(getBottomRPM()) + "  (0 = cable not plugged in)");
         dashboard.addData("Power / battery", Math.round(power * 100) / 100.0 + " / " + Math.round(volts * 10) / 10.0 + " V");
         dashboard.addData("Bottom motor", BOTTOM_ENABLED ? "powered" : "OFF (BOTTOM_ENABLED = false)");
+        dashboard.addData("TOP / BOTTOM_REVERSED (used at INIT)", topReversedUsed + " / " + bottomReversedUsed);
         dashboard.addData("Ready to fire", atSpeed());
         if (USE_GATE) {
             dashboard.addData("Gate", gate == null ? "--" : isGateOpen() ? "FEEDING" : "STOPPED");

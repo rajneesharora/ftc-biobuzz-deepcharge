@@ -19,7 +19,7 @@ import org.firstinspires.ftc.teamcode.subsystems.Transport;
  *   Y (hold)   intake in          A (hold)   intake out
  *   X (hold)   transport feed     B (hold)   transport reverse
  *   D-pad Up   flywheel on/off    (watch actual vs target RPM)
- *   right bumper (hold)  spin the shooter gate (CR servo) -- check it feeds INTO the wheel
+ *   right bumper (hold)  spin the shooter gate (CR servo), only if Shooter.USE_GATE is true
  *   left bumper (hold)   flower gate to ROTATED_POSITION (down); let go = HOME_POSITION (up)
  *
  * Shooter: check shooterTop alone first (Shooter.BOTTOM_ENABLED = false). Once the flywheels
@@ -80,7 +80,9 @@ public class MechanismCheck extends LinearOpMode {
             shooter.update();
             flowerGate.update();
 
-            dashboard.addLine("Y/A intake   X/B transport   D-pad Up flywheel   RB gate   LB flower");
+            dashboard.addLine("Y/A intake   X/B transport   D-pad Up flywheel   LB flower"
+                    + (Shooter.USE_GATE ? "   RB gate" : ""));
+            dashboard.addLine("Direction settings are read at INIT: STOP, change in Panels, then INIT again.");
             intake.report(dashboard);
             transport.report(dashboard);
             shooter.report(dashboard);

@@ -37,6 +37,7 @@ public class Intake implements Subsystem {
     private final DcMotorEx motor2;   // null if missing or not fitted
     private final String status;
     private State state = State.OFF;
+    private final boolean reversedUsed = REVERSED;   // what INIT actually used
 
     public Intake(HardwareMap hardwareMap) {
         motor = ENABLED ? hardwareMap.tryGet(DcMotorEx.class, MOTOR_NAME) : null;
@@ -90,6 +91,7 @@ public class Intake implements Subsystem {
     public void report(Dashboard dashboard) {
         dashboard.section("INTAKE");
         dashboard.addData("Intake", state + "  [" + status + "]");
+        dashboard.addData("Intake REVERSED (used at INIT)", reversedUsed);
     }
 
     @Override

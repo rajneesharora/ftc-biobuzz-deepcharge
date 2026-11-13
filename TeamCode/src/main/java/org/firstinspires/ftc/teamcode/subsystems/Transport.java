@@ -42,6 +42,8 @@ public class Transport implements Subsystem {
     private final String status;
     private State state = State.OFF;
     private boolean rightStopped = false;
+    private final boolean leftReversedUsed = LEFT_REVERSED;    // what INIT actually used
+    private final boolean rightReversedUsed = RIGHT_REVERSED;
 
     public Transport(HardwareMap hardwareMap) {
         left = ENABLED ? hardwareMap.tryGet(CRServo.class, LEFT_NAME) : null;
@@ -99,6 +101,7 @@ public class Transport implements Subsystem {
     public void report(Dashboard dashboard) {
         dashboard.section("TRANSPORT");
         dashboard.addData("Transport", state + (rightStopped ? " (right held)" : "") + "  [" + status + "]");
+        dashboard.addData("LEFT / RIGHT_REVERSED (used at INIT)", leftReversedUsed + " / " + rightReversedUsed);
     }
 
     @Override
