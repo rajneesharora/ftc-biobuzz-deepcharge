@@ -24,7 +24,7 @@ public class Intake implements Subsystem {
     public static boolean ENABLED = true;
     public static String MOTOR_NAME = "intake";
     public static String MOTOR_2_NAME = "intake2";
-    public static boolean REVERSED = false;
+    public static boolean REVERSED = true;    // checked in Port Finder on the new robot
     public static boolean REVERSED_2 = false;
 
     // Live-editable in Panels.

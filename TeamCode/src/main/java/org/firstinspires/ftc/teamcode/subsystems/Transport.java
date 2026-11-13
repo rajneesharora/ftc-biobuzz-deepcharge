@@ -33,7 +33,7 @@ public class Transport implements Subsystem {
      * false = only run while firing (and ejecting). Use this if there is NO gate, otherwise
      * balls are shot as soon as they're picked up.
      */
-    public static boolean RUN_WITH_INTAKE = true;
+    public static boolean RUN_WITH_INTAKE = false;   // this robot has no gate
 
     public enum State { OFF, FEED, REVERSE }
 

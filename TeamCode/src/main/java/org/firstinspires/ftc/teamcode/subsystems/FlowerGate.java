@@ -31,8 +31,8 @@ public class FlowerGate implements Subsystem {
     /** Continuous rotation servo: speed while rotating, 0 to 1. */
     public static double ROTATE_POWER = 1.0;
     /** Regular servo: position at rest and while rotating, 0 to 1. */
-    public static double HOME_POSITION = 0.0;
-    public static double ROTATED_POSITION = 0.5;
+    public static double HOME_POSITION = 0.1;      // up
+    public static double ROTATED_POSITION = 0.65;  // down (same values the autos use)
 
     private final CRServo crServo;   // null if missing or configured as a regular servo
     private final Servo servo;       // null if missing or configured as continuous rotation
