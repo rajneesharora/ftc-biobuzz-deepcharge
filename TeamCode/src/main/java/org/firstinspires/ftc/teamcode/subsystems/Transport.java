@@ -11,7 +11,8 @@ import org.firstinspires.ftc.teamcode.lib.Dashboard;
  * Transport: two continuous-rotation servos that carry pieces from the intake into the
  * flywheel. Configure them on the Driver Station as "Continuous Rotation Servo", NOT "Servo".
  *
- * Set each side so both push balls toward the shooter (checked on this robot: both REVERSED).
+ * Set each side so both push balls toward the shooter (new robot: neither reversed; the old
+ * robot had both REVERSED).
  * If pieces get pushed the wrong way by one side, flip that side's REVERSED flag.
  *
  * Missing servos are reported on the dashboard, never a crash.
@@ -22,8 +23,8 @@ public class Transport implements Subsystem {
     public static boolean ENABLED = true;
     public static String LEFT_NAME = "transportLeft";
     public static String RIGHT_NAME = "transportRight";
-    public static boolean LEFT_REVERSED = true;
-    public static boolean RIGHT_REVERSED = true;
+    public static boolean LEFT_REVERSED = false;
+    public static boolean RIGHT_REVERSED = false;
 
     public static double FEED_POWER = 1.0;
     public static double REVERSE_POWER = -1.0;
