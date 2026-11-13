@@ -21,7 +21,10 @@ import org.firstinspires.ftc.teamcode.lib.Dashboard;
  *   power = (KV * targetRPM + KS) * NOMINAL_VOLTS / battery  +  KP * (targetRPM - actualRPM)
  *
  * Same power means they can never fight over the speed. BOTTOM_REVERSED makes shooterBottom
- * push the gears the same way as shooterTop (checked in Port Finder: it needs reversing).
+ * push the gears the same way as shooterTop. Checked on the robot: with only shooterTop
+ * powered, shooterBottom's encoder read NEGATIVE with BOTTOM_REVERSED = true, so it is false.
+ * Re-check after any rebuild of the shooter: with BOTTOM_ENABLED = false and the flywheel
+ * spinning, "Bottom encoder RPM" must be POSITIVE and close to the top RPM.
  * NEVER change BOTTOM_REVERSED without re-checking: if it's wrong, the two motors fight through
  * the gears -- they stall, buzz and get hot, and can strip the gears or burn out.
  *
@@ -45,7 +48,7 @@ public class Shooter implements Subsystem {
     public static String BOTTOM_NAME = "shooterBottom";
     /** Flip if the flywheels spin backwards (balls not shot out). Flip BOTH directions together. */
     public static boolean TOP_REVERSED = false;
-    public static boolean BOTTOM_REVERSED = true;
+    public static boolean BOTTOM_REVERSED = false;
     /** false = only shooterTop is powered. Turn on once shooterTop alone is checked. */
     public static boolean BOTTOM_ENABLED = false;
     /** Encoder ticks per motor output revolution. goBILDA 5202/5203 bare (6000 RPM) = 28. */
