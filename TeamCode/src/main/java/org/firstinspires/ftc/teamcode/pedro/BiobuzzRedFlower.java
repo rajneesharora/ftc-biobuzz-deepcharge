@@ -56,7 +56,8 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  *      load. Coming in low keeps it off the second flower at (144, 96).
  *  10  drive SHOOT_FORWARD_IN straight forward
  *  11  flower servo down again (FLOWER_POSITION), wait FLOWER_WAIT_MS
- *  12  drive to the second flower spot: SHOOT's x, SHOOT's y + FLOWER_2_DY
+ *  12  drive to the second flower spot: SHOOT's x, SHOOT's y + FLOWER_2_DY, and stay there for
+ *      FLOWER_2_STAY_MS (picking up)
  *  13  drive FLOWER_2_FORWARD_IN straight forward
  *  14  flower servo up (FLOWER_REST_POSITION), wait FLOWER_WAIT_MS
  *  15  drive back to SHOOT and shoot that load for SHOOT_MS; flywheel, intake, transport off
@@ -113,6 +114,8 @@ public class BiobuzzRedFlower extends OpMode {
     public static double SHOOT_FORWARD_IN = 10;
     /** Second flower spot: SHOOT's x, and this much more y than SHOOT. */
     public static double FLOWER_2_DY = 10;
+    /** How long to stay at the second flower spot, picking up. */
+    public static double FLOWER_2_STAY_MS = 500;
     /** From the second flower spot: straight forward this far before the servo goes up. */
     public static double FLOWER_2_FORWARD_IN = 10;
 
@@ -301,6 +304,11 @@ public class BiobuzzRedFlower extends OpMode {
                 // 12. To the second flower spot.
                 instant(() -> step = "to the second flower spot"),
                 driveWithTimeout(toFlower2),
+                instant(() -> {
+                    follower.hold(follower.pose());
+                    step = "staying at flower 2, " + FLOWER_2_STAY_MS + " ms";
+                }),
+                waitMs(FLOWER_2_STAY_MS),
 
                 // 13. Forward.
                 instant(() -> step = "forward " + FLOWER_2_FORWARD_IN + " in"),
