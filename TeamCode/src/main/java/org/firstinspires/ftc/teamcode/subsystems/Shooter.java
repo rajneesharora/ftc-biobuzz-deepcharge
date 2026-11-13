@@ -21,19 +21,21 @@ import org.firstinspires.ftc.teamcode.lib.Dashboard;
  *   power = (KV * targetRPM + KS) * NOMINAL_VOLTS / battery  +  KP * (targetRPM - actualRPM)
  *
  * Same power means they can never fight over the speed. BOTTOM_REVERSED makes shooterBottom
- * push the gears the same way as shooterTop. Checked on the robot: with only shooterTop
- * powered, shooterBottom's encoder read NEGATIVE with BOTTOM_REVERSED = true, so it is false.
- * Re-check after any rebuild of the shooter: with BOTTOM_ENABLED = false and the flywheel
- * spinning, "Bottom encoder RPM" must be POSITIVE and close to the top RPM.
+ * push the gears the same way as shooterTop. Port Finder (raw power, one motor at a time)
+ * showed shooterBottom spins the flywheels the opposite way to shooterTop, so it is reversed.
+ * (An encoder-sign check was misleading here: the two encoder cables appear to be swapped.)
+ * Each motor's ENCODER cable must be in the SAME port number as its power cable -- check that
+ * by eye; with geared motors, turning the wheel by hand moves both encoders, so it can't tell.
  * NEVER change BOTTOM_REVERSED without re-checking: if it's wrong, the two motors fight through
  * the gears -- they stall, buzz and get hot, and can strip the gears or burn out.
  *
  * BOTTOM_ENABLED = false leaves shooterBottom unpowered (it just turns along through the
  * gears) -- use that to check shooterTop's direction and RPM on its own first.
  *
- * shooterTop's ENCODER cable must be plugged in. If the flywheel reads ~0 RPM while being
- * driven hard, the controller stops and shows ENCODER FAULT instead of pushing full power
- * forever; turn the flywheel off and on again after fixing it.
+ * shooterTop's ENCODER cable must be plugged in, in shooterTop's port. If the flywheel reads
+ * ~0 RPM while being driven hard, or reads BACKWARDS (negative) while being driven forward,
+ * the controller stops and shows ENCODER FAULT instead of pushing full power forever; turn the
+ * flywheel off and on again after fixing it.
  *
  * Tuning (Panels > Configurables > Shooter, flywheel spinning, no balls):
  *   1. KP = 0. Adjust KV until actual RPM is close to TARGET_RPM (raise KV if it's slow).
@@ -48,7 +50,7 @@ public class Shooter implements Subsystem {
     public static String BOTTOM_NAME = "shooterBottom";
     /** Flip if the flywheels spin backwards (balls not shot out). Flip BOTH directions together. */
     public static boolean TOP_REVERSED = false;
-    public static boolean BOTTOM_REVERSED = false;
+    public static boolean BOTTOM_REVERSED = true;
     /** false = only shooterTop is powered. Turn on once shooterTop alone is checked. */
     public static boolean BOTTOM_ENABLED = false;
     /** Encoder ticks per motor output revolution. goBILDA 5202/5203 bare (6000 RPM) = 28. */
@@ -88,6 +90,7 @@ public class Shooter implements Subsystem {
     private final ElapsedTime voltageTimer = new ElapsedTime();
     private final ElapsedTime stalledTimer = new ElapsedTime();
     private boolean encoderFault = false;
+    private String faultReason = "";
     private final boolean topReversedUsed = TOP_REVERSED;      // what INIT actually used
     private final boolean bottomReversedUsed = BOTTOM_REVERSED;
 
@@ -192,11 +195,20 @@ public class Shooter implements Subsystem {
             double feedforward = (KV * TARGET_RPM + KS) * NOMINAL_VOLTS / volts;
             power = Range.clip(feedforward + KP * (TARGET_RPM - rpm), 0, MAX_POWER);
 
+            // Driven forward but reading backwards: wrong encoder cable/direction. Stop at once,
+            // or the controller would push harder and harder to "catch up".
+            if (rpm < -100) {
+                encoderFault = true;
+                faultReason = "'" + TOP_NAME + "' reads BACKWARDS (" + Math.round(rpm)
+                        + " RPM) -- encoder cable in the wrong port, or swapped with " + BOTTOM_NAME;
+                power = 0;
+            }
             // Driven hard but not turning: the encoder cable is probably out. Stop, don't run away.
             if (power < 0.5 || Math.abs(rpm) > 100) {
                 stalledTimer.reset();
             } else if (stalledTimer.seconds() > 1.5) {
                 encoderFault = true;
+                faultReason = "'" + TOP_NAME + "' reads ~0 RPM -- check its encoder cable";
                 power = 0;
             }
         }
@@ -217,7 +229,7 @@ public class Shooter implements Subsystem {
         dashboard.section("SHOOTER");
         dashboard.addData("Shooter", (spinning ? "SPINNING" : "OFF") + "  [" + status + "]");
         if (encoderFault) {
-            dashboard.addData("ENCODER FAULT", "'" + TOP_NAME + "' reads ~0 RPM -- check its encoder cable, then turn the flywheel off and on");
+            dashboard.addData("ENCODER FAULT", faultReason + "; flywheel stopped. Fix, then turn it off and on");
         }
         dashboard.addData("RPM (actual / target)", Math.round(getRPM()) + " / " + Math.round(TARGET_RPM));
         dashboard.addData("Bottom encoder RPM", Math.round(getBottomRPM()) + "  (0 = cable not plugged in)");
