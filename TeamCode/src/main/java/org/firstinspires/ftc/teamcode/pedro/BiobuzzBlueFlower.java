@@ -61,18 +61,14 @@ import static com.pedropathing.ivy.pedro.PedroCommands.follow;
  *      SHOOT_TURN_DEG more (negative = clockwise), to the second shooting spot. Coming in this
  *      way keeps it off the second flower at (0, 48).
  *  10  drive SHOOT_FORWARD_IN straight forward
- *  11  slide sideways FLOWER_2_DY in y (still not turning)
- *  12  flower servo down again (FLOWER_POSITION), wait FLOWER_WAIT_MS -- after the slide, so
- *      it can't sweep into anything on the way
- *  13  straight back into the second flower spot (SHOOT's x, SHOOT's y + FLOWER_2_DY) and stay
- *      there for FLOWER_2_STAY_MS (picking up)
- *  14  drive FLOWER_2_FORWARD_IN straight forward
- *  15  flower servo up (FLOWER_REST_POSITION), wait FLOWER_WAIT_MS
- *  16  slide sideways back by FLOWER_2_DY, then straight back to SHOOT -- so steps 10-16 make a
- *      U of straight moves, never a slanted one -- and shoot that load for SHOOT_MS; then the
- *      flywheel, intake and transport go off
- *  17  park at PARK (Red's park, turned), curving through PARK_CONTROL, and hold
- * Steps 10-17 keep the heading the robot had at SHOOT.
+ *  11  flower servo down again (FLOWER_POSITION), wait FLOWER_WAIT_MS
+ *  12  drive to the second flower spot: SHOOT's x, SHOOT's y + FLOWER_2_DY, and stay there for
+ *      FLOWER_2_STAY_MS (picking up)
+ *  13  drive FLOWER_2_FORWARD_IN straight forward
+ *  14  flower servo up (FLOWER_REST_POSITION), wait FLOWER_WAIT_MS
+ *  15  drive back to SHOOT and shoot that load for SHOOT_MS; flywheel, intake, transport off
+ *  16  park at PARK (Red's park, turned), curving through PARK_CONTROL, and hold
+ * Steps 10-16 keep the heading the robot had at SHOOT.
  *
  * The flower servo is not moved before step 3, so it doesn't jump at INIT or PLAY.
  *
@@ -202,11 +198,9 @@ public class BiobuzzBlueFlower extends OpMode {
         Pose shoot = p.of(SHOOT_X, SHOOT_Y, shootHeading);
         double hs = Math.toRadians(shootHeading);
         Pose shootAhead = p.of(SHOOT_X + SHOOT_FORWARD_IN * Math.cos(hs), SHOOT_Y + SHOOT_FORWARD_IN * Math.sin(hs), shootHeading);
-        Pose besideFlower2 = p.of(shootAhead.x(), shootAhead.y() + FLOWER_2_DY, shootHeading);
         Pose flower2 = p.of(SHOOT_X, SHOOT_Y + FLOWER_2_DY, shootHeading);
         Pose flower2Ahead = p.of(SHOOT_X + FLOWER_2_FORWARD_IN * Math.cos(hs),
                 SHOOT_Y + FLOWER_2_DY + FLOWER_2_FORWARD_IN * Math.sin(hs), shootHeading);
-        Pose besideShoot = p.of(flower2Ahead.x(), flower2Ahead.y() - FLOWER_2_DY, shootHeading);
         follower.setPose(start);
 
         Path awayFromWall = line(start, offWall).constant(start);
@@ -220,11 +214,9 @@ public class BiobuzzBlueFlower extends OpMode {
         Path toShoot = curve(cross, p.of(SHOOT_CONTROL_X, SHOOT_CONTROL_Y, flowerHeading), shoot)
                 .linear(cross, shoot);
         Path shootForward = line(shoot, shootAhead).constant(shoot);
-        Path sideToFlower2 = line(shootAhead, besideFlower2).constant(shoot);
-        Path intoFlower2 = line(besideFlower2, flower2).constant(shoot);
+        Path toFlower2 = line(shootAhead, flower2).constant(shoot);
         Path flower2Forward = line(flower2, flower2Ahead).constant(shoot);
-        Path sideBack = line(flower2Ahead, besideShoot).constant(shoot);
-        Path backToShoot = line(besideShoot, shoot).constant(shoot);
+        Path backToShoot = line(flower2Ahead, shoot).constant(shoot);
         Pose park = p.of(PARK_X, PARK_Y, shootHeading);
         Path toPark = curve(shoot, p.of(PARK_CONTROL_X, PARK_CONTROL_Y, shootHeading), park).constant(shoot);
 
@@ -307,11 +299,7 @@ public class BiobuzzBlueFlower extends OpMode {
                 instant(() -> step = "forward " + SHOOT_FORWARD_IN + " in"),
                 driveWithTimeout(shootForward),
 
-                // 11. Sideways, level with the second flower.
-                instant(() -> step = "sideways " + FLOWER_2_DY + " in (y)"),
-                driveWithTimeout(sideToFlower2),
-
-                // 12. Flower servo down again.
+                // 11. Flower servo down again.
                 instant(() -> {
                     follower.hold(follower.pose());
                     if (flowerServo != null) {
@@ -321,20 +309,20 @@ public class BiobuzzBlueFlower extends OpMode {
                 }),
                 waitMs(FLOWER_WAIT_MS),
 
-                // 13. Straight back into the second flower spot.
-                instant(() -> step = "back into the second flower spot"),
-                driveWithTimeout(intoFlower2),
+                // 12. To the second flower spot.
+                instant(() -> step = "to the second flower spot"),
+                driveWithTimeout(toFlower2),
                 instant(() -> {
                     follower.hold(follower.pose());
                     step = "staying at flower 2, " + FLOWER_2_STAY_MS + " ms";
                 }),
                 waitMs(FLOWER_2_STAY_MS),
 
-                // 14. Forward.
+                // 13. Forward.
                 instant(() -> step = "forward " + FLOWER_2_FORWARD_IN + " in"),
                 driveWithTimeout(flower2Forward),
 
-                // 15. Flower servo up.
+                // 14. Flower servo up.
                 instant(() -> {
                     follower.hold(follower.pose());
                     if (flowerServo != null) {
@@ -345,10 +333,7 @@ public class BiobuzzBlueFlower extends OpMode {
                 waitMs(FLOWER_WAIT_MS),
                 instant(this::feedNowIfNotOnArrival),
 
-                // 16. Sideways back, straight back to the shooting spot and shoot; then
-                //     everything off for parking.
-                instant(() -> step = "sideways back " + FLOWER_2_DY + " in (y)"),
-                driveWithTimeout(sideBack),
+                // 15. Back to the shooting spot and shoot; then everything off for parking.
                 instant(() -> step = "back to the shooting spot"),
                 driveWithTimeout(backToShoot),
                 instant(() -> {
@@ -363,7 +348,7 @@ public class BiobuzzBlueFlower extends OpMode {
                     transport.setState(Transport.State.OFF);
                 }),
 
-                // 17. Park, then hold.
+                // 16. Park, then hold.
                 instant(() -> step = "parking"),
                 driveWithTimeout(toPark),
                 instant(() -> {
