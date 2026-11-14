@@ -138,8 +138,11 @@ public class BiobuzzBlueFlower extends OpMode {
     /** true = start feeding when the robot reaches the shooting spot; false = right after a pick-up. */
     public static boolean FEED_ON_ARRIVAL = true;
 
-    /** Safety limit: give up on a drive after this long and carry on. */
-    public static double PATH_TIMEOUT_MS = 5000;
+    /** Intake power during this auto (TeleOp uses Intake.INTAKE_POWER). */
+    public static double INTAKE_POWER = 0.6;
+
+    /** Safety limit: give up on a drive after this long and carry on (e.g. pushing on a wall). */
+    public static double PATH_TIMEOUT_MS = 2000;
 
     private final PoseFactory p = PoseFactory.degrees();
 
@@ -222,6 +225,7 @@ public class BiobuzzBlueFlower extends OpMode {
 
         step = "off the wall";
         autoTimer.reset();
+        intake.setIntakePower(INTAKE_POWER);
         shooter.setSpinning(true);
         step = "flywheel spinning up";
         schedule(sequential(

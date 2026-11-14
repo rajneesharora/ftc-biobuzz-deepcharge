@@ -55,9 +55,11 @@ public class BiobuzzRedPark extends OpMode {
     public static double PARK_CONTROL_X = 100, PARK_CONTROL_Y = 78;
 
     /** Time from PLAY (flywheel already spinning) until the balls are fed in. */
-    public static double WAIT_MS = 20000;
+    public static double WAIT_MS = 8000;
     /** Long enough for ALL balls to go through. Raise it if a ball is left behind. */
     public static double SHOOT_MS = 2000;
+    /** Intake power during this auto (TeleOp uses Intake.INTAKE_POWER). */
+    public static double INTAKE_POWER = 0.6;
     /** Safety limit: give up on the drive after this long. */
     public static double PATH_TIMEOUT_MS = 5000;
 
@@ -111,6 +113,7 @@ public class BiobuzzRedPark extends OpMode {
 
         Path toPark = curve(start, pose(PARK_CONTROL_X, PARK_CONTROL_Y), park).constant(start);
 
+        intake.setIntakePower(INTAKE_POWER);
         shooter.setSpinning(true);
         step = "flywheel on, waiting";
 

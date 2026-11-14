@@ -37,6 +37,8 @@ public class Intake implements Subsystem {
     private final DcMotorEx motor2;   // null if missing or not fitted
     private final String status;
     private State state = State.OFF;
+    /** Power used for INTAKE; NaN = INTAKE_POWER. Autos set their own. */
+    private double intakePower = Double.NaN;
     private final boolean reversedUsed = REVERSED;   // what INIT actually used
 
     public Intake(HardwareMap hardwareMap) {
@@ -71,11 +73,16 @@ public class Intake implements Subsystem {
         return state;
     }
 
+    /** Run INTAKE at this power instead of INTAKE_POWER (autos use a gentler speed). */
+    public void setIntakePower(double power) {
+        this.intakePower = power;
+    }
+
     @Override
     public void update() {
         double power;
         switch (state) {
-            case INTAKE: power = INTAKE_POWER; break;
+            case INTAKE: power = Double.isNaN(intakePower) ? INTAKE_POWER : intakePower; break;
             case EJECT:  power = EJECT_POWER;  break;
             default:     power = 0;            break;
         }
