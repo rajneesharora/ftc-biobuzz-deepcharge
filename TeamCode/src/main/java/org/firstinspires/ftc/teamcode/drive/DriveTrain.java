@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode.drive;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 
 /**
  * What teleop needs from a drivetrain. Two versions exist:
@@ -33,6 +34,9 @@ public interface DriveTrain {
     void stop();
 
     void report(Dashboard dashboard);
+
+    /** Adds this drivetrain's columns to the match recording. Put the same columns every loop. */
+    void record(MatchRecorder recorder);
 
     /** Shown on the dashboard so the drivers always know which TeleOp is running. */
     String name();

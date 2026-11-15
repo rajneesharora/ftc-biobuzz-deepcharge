@@ -7,6 +7,7 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.teamcode.lib.Dashboard;
+import org.firstinspires.ftc.teamcode.lib.MatchRecorder;
 
 /**
  * Flower gate: one servo (Control Hub servo port 3, "flowerGate").
@@ -82,6 +83,11 @@ public class FlowerGate implements Subsystem {
     public void report(Dashboard dashboard) {
         dashboard.section("FLOWER GATE");
         dashboard.addData("Flower gate", (rotating ? "ROTATING" : "STOPPED") + "  [" + status + "]");
+    }
+
+    @Override
+    public void record(MatchRecorder recorder) {
+        recorder.put("flower_gate_rotating", rotating);
     }
 
     @Override

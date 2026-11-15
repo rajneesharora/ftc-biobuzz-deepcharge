@@ -71,3 +71,19 @@ After a config change, pull a copy into git so the repo matches the robot:
 1. **Localization Check**: push by hand and confirm x/y/heading directions. Push exactly 48".
 2. **BioBuzz TeleOp**: confirm field-centric drive. A re-zeros "forward", B locks in place.
 3. **Pedro Long Straight 180 Auto**: test on its own. TeleOp doesn't need it.
+
+## Match recordings
+Every TeleOp and auto writes one CSV row per loop to `/sdcard/FIRST/analysis/` on the robot
+(`lib/MatchRecorder`): loop time, battery, both gamepads, drive command, pose, auto step, and
+every mechanism (including flywheel target/actual RPM and the gate). Nothing to switch on.
+
+After a practice or a match, with the laptop on robot Wi-Fi or USB:
+```
+adb pull /sdcard/FIRST/analysis/ recordings/
+python3 tools/match_report.py recordings/
+```
+The report gives, per file: loop stalls, battery sag, how long each auto step took, flywheel
+spin-up time, and per volley the shots, RPM dip, recovery and gap between shots, with a verdict
+on whether the flywheel or the feed limits the shot rate. It also flags signs the driver lost
+control (gamepad dropping out, the Panels browser gamepad overriding the sticks, a recording that
+ends mid-match). Each match is about 1-2 MB; clear the folder now and then.
