@@ -67,7 +67,7 @@ public class Shooter implements Subsystem {
     public static double NOMINAL_VOLTS = 12.0;
     public static double MAX_POWER = 1.0;
     /** How close counts as "at speed". */
-    public static double RPM_TOLERANCE = 100;
+    public static double RPM_TOLERANCE = 10;
 
     /** false = no gate fitted (the transport alone feeds the wheels). */
     public static boolean USE_GATE = false;

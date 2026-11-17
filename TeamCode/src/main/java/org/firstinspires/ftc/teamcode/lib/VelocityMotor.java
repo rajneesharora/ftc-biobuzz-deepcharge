@@ -11,7 +11,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 public class VelocityMotor {
 
     /** How close counts as "at speed", in RPM. */
-    public static double RPM_TOLERANCE = 100;
+    public static double RPM_TOLERANCE = 10;
 
     private final DcMotorEx motor;
     private final double ticksPerRevolution;
